@@ -33,7 +33,7 @@ services:
       - telyx-net
   
   otel-collector:
-    image: otel/opentelemetry-collector:0.80.0
+    image: otel/opentelemetry-collector:0.115.1
     command: ["--config=/etc/otel-collector-config.yml"]
     volumes:
       - ./docker/otel-collector-config.yml:/etc/otel-collector-config.yml
