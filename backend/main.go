@@ -10,11 +10,14 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"golang.org/x/time/rate"
 
+	"telyx-backend/auth"
 	"telyx-backend/config"
 	"telyx-backend/handlers"
 	"telyx-backend/logger"
 	"telyx-backend/middleware"
+	"telyx-backend/ratelimit"
 	"telyx-backend/telemetry"
 )
 
@@ -28,8 +31,8 @@ func main() {
 
 	// Initialize structured logger
 	log := logger.New(cfg.LogLevel, true)
-	log.Info("Starting TelyX Backend", map[string]interface{}{
-		"version": "1.0.0",
+	log.Info("Starting TelyX Backend v2.0", map[string]interface{}{
+		"version": "2.0.0",
 		"port":    cfg.ServerPort,
 	})
 
@@ -48,25 +51,43 @@ func main() {
 		})
 	}
 
+	// Initialize authentication (optional - for v2.0 features)
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "change-this-secret-in-production"
+		log.Warn("Using default JWT secret - change in production!", nil)
+	}
+	authMgr := auth.NewAuthManager(jwtSecret)
+
+	// Initialize rate limiter (100 requests per second, burst of 200)
+	rateLimiter := ratelimit.NewLimiter(rate.Limit(100), 200, time.Minute)
+
 	// Initialize handlers
 	h := handlers.New(log, cfg.OpenSearchURL)
 
 	// Create router
 	mux := http.NewServeMux()
 
-	// Register routes
+	// Public routes (no auth required)
 	mux.HandleFunc("/health", h.HealthCheck)
-	mux.HandleFunc("/logs", h.LogIngestion)
-	mux.HandleFunc("/api/metrics-info", h.MetricsInfo)
 	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/api/metrics-info", h.MetricsInfo)
+
+	// Protected routes (optional auth - logs work with or without auth)
+	// Wrap with optional authentication to add user context if provided
+	optionalAuth := middleware.OptionalAuthentication(authMgr)
+	mux.Handle("/logs", optionalAuth(http.HandlerFunc(h.LogIngestion)))
 
 	// Apply middleware chain
 	handler := middleware.Chain(
 		middleware.Recovery(log),
 		middleware.RequestLogger(log),
+		middleware.RateLimit(rateLimiter),
 		middleware.Tracing,
 		middleware.Metrics(metrics.RequestCount, metrics.RequestDuration),
 		middleware.SecurityHeaders,
+		middleware.ContentSecurityPolicy,
+		middleware.RequestSizeLimit(10*1024*1024), // 10MB max request size
 	)(mux)
 
 	// Apply CORS if enabled
