@@ -26,17 +26,17 @@ services:
   prometheus:
     image: prom/prometheus:latest
     volumes:
-      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
     networks:
       - telyx-net
-  
+
   otel-collector:
     image: otel/opentelemetry-collector:0.115.1
     command: ["--config=/etc/otel-collector-config.yml"]
     volumes:
-      - ./docker/otel-collector-config.yml:/etc/otel-collector-config.yml
+      - ./otel-collector-config.yml:/etc/otel-collector-config.yml
     ports:
       - "4317:4317" # gRPC
       - "55681:55681" # HTTP

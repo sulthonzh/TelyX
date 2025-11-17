@@ -1,0 +1,45 @@
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  govet:
+    enable-all: true
+  gocyclo:
+    min-complexity: 15
+  dupl:
+    threshold: 100
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - gofmt
+    - goimports
+  disable:
+    - structcheck
+    - varcheck
+    - deadcode
+    - ifshort
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosec
+        - dupl
+
+run:
+  timeout: 5m
+  skip-dirs:
+    - vendor
+  skip-files:
+    - ".*\\.pb\\.go$"
