@@ -1,0 +1,87 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - "http://localhost:3000"
+            - "http://frontend:3000"
+          allowed_headers:
+            - "*"
+
+processors:
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+
+  # Add resource attributes
+  resource:
+    attributes:
+      - key: service.namespace
+        value: "telyx"
+        action: insert
+      - key: deployment.environment
+        value: "development"
+        action: insert
+
+  # Tail-based sampling for better trace coverage
+  tail_sampling:
+    policies:
+      - name: error-traces
+        type: status_code
+        status_code:
+          status_codes:
+            - ERROR
+      - name: slow-traces
+        type: latency
+        latency:
+          threshold_ms: 1000
+      - name: probabilistic-sample
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 10
+
+exporters:
+  logging:
+    loglevel: debug
+
+  # Export traces to console for debugging
+  debug:
+    verbosity: detailed
+
+  # Export to Prometheus (if needed in future)
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: telyx
+    const_labels:
+      environment: development
+
+  # Export metrics and traces to file for backup
+  file:
+    path: /var/log/otel-collector-traces.json
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch, tail_sampling]
+      exporters: [logging, debug, file]
+
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [logging, prometheus]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
