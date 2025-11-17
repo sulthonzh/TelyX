@@ -10,19 +10,19 @@ import (
 )
 
 var (
-	ErrInvalidEmail    = errors.New("invalid email address")
-	ErrInvalidURL      = errors.New("invalid URL")
-	ErrInvalidIP       = errors.New("invalid IP address")
-	ErrStringTooShort  = errors.New("string too short")
-	ErrStringTooLong   = errors.New("string too long")
-	ErrInvalidFormat   = errors.New("invalid format")
+	ErrInvalidEmail        = errors.New("invalid email address")
+	ErrInvalidURL          = errors.New("invalid URL")
+	ErrInvalidIP           = errors.New("invalid IP address")
+	ErrStringTooShort      = errors.New("string too short")
+	ErrStringTooLong       = errors.New("string too long")
+	ErrInvalidFormat       = errors.New("invalid format")
 	ErrContainsSQLKeywords = errors.New("potentially dangerous SQL keywords detected")
-	ErrContainsXSS     = errors.New("potentially dangerous XSS content detected")
+	ErrContainsXSS         = errors.New("potentially dangerous XSS content detected")
 )
 
 var (
-	emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
-	urlRegex   = regexp.MustCompile(`^https?://[a-zA-Z0-9\-._~:/?#\[\]@!$&'()*+,;=]+$`)
+	emailRegex  = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+	urlRegex    = regexp.MustCompile(`^https?://[a-zA-Z0-9\-._~:/?#\[\]@!$&'()*+,;=]+$`)
 	sqlKeywords = []string{
 		"DROP", "DELETE", "INSERT", "UPDATE", "SELECT", "UNION",
 		"CREATE", "ALTER", "EXEC", "EXECUTE", "SCRIPT", "--", "/*", "*/",

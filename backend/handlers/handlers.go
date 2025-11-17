@@ -21,9 +21,9 @@ type Logger interface {
 
 // Handler holds dependencies for HTTP handlers
 type Handler struct {
-	logger         Logger
-	openSearchURL  string
-	httpClient     *http.Client
+	logger        Logger
+	openSearchURL string
+	httpClient    *http.Client
 }
 
 // New creates a new Handler instance

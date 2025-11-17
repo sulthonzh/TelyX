@@ -15,9 +15,9 @@ import (
 )
 
 var (
-	ErrInvalidToken     = errors.New("invalid token")
-	ErrExpiredToken     = errors.New("token expired")
-	ErrInvalidAPIKey    = errors.New("invalid API key")
+	ErrInvalidToken      = errors.New("invalid token")
+	ErrExpiredToken      = errors.New("token expired")
+	ErrInvalidAPIKey     = errors.New("invalid API key")
 	ErrRateLimitExceeded = errors.New("rate limit exceeded")
 )
 
@@ -31,17 +31,17 @@ type Claims struct {
 
 // APIKey represents an API key
 type APIKey struct {
-	ID          string
-	Key         string
-	HashedKey   string
-	Name        string
-	Roles       []string
-	CreatedAt   time.Time
-	ExpiresAt   *time.Time
-	LastUsedAt  *time.Time
-	RateLimit   int // requests per minute
+	ID           string
+	Key          string
+	HashedKey    string
+	Name         string
+	Roles        []string
+	CreatedAt    time.Time
+	ExpiresAt    *time.Time
+	LastUsedAt   *time.Time
+	RateLimit    int // requests per minute
 	RequestCount int
-	mu          sync.Mutex
+	mu           sync.Mutex
 }
 
 // AuthManager manages authentication
@@ -124,14 +124,14 @@ func (am *AuthManager) GenerateAPIKey(name string, roles []string, rateLimit int
 	}
 
 	apiKey := &APIKey{
-		ID:         generateID(),
-		Key:        key,
-		HashedKey:  hashedKey,
-		Name:       name,
-		Roles:      roles,
-		CreatedAt:  time.Now(),
-		ExpiresAt:  expiresAt,
-		RateLimit:  rateLimit,
+		ID:        generateID(),
+		Key:       key,
+		HashedKey: hashedKey,
+		Name:      name,
+		Roles:     roles,
+		CreatedAt: time.Now(),
+		ExpiresAt: expiresAt,
+		RateLimit: rateLimit,
 	}
 
 	am.mu.Lock()

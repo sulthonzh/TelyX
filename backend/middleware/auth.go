@@ -22,7 +22,7 @@ type AuthManager interface {
 type contextKey string
 
 const (
-	UserContextKey contextKey = "user"
+	UserContextKey  contextKey = "user"
 	RolesContextKey contextKey = "roles"
 )
 

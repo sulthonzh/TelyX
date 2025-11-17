@@ -41,21 +41,21 @@ type CircuitBreaker struct {
 	resetTimeout time.Duration
 	halfOpenMax  uint32
 
-	mu           sync.RWMutex
-	state        State
-	failures     uint32
-	successes    uint32
-	lastFailTime time.Time
+	mu              sync.RWMutex
+	state           State
+	failures        uint32
+	successes       uint32
+	lastFailTime    time.Time
 	lastStateChange time.Time
 }
 
 // NewCircuitBreaker creates a new circuit breaker
 func NewCircuitBreaker(maxFailures uint32, resetTimeout time.Duration, halfOpenMax uint32) *CircuitBreaker {
 	return &CircuitBreaker{
-		maxFailures:  maxFailures,
-		resetTimeout: resetTimeout,
-		halfOpenMax:  halfOpenMax,
-		state:        StateClosed,
+		maxFailures:     maxFailures,
+		resetTimeout:    resetTimeout,
+		halfOpenMax:     halfOpenMax,
+		state:           StateClosed,
 		lastStateChange: time.Now(),
 	}
 }
@@ -188,7 +188,7 @@ func (cb *CircuitBreaker) Metrics() map[string]interface{} {
 
 // Retry implements retry with exponential backoff
 type Retry struct {
-	maxAttempts uint
+	maxAttempts  uint
 	initialDelay time.Duration
 	maxDelay     time.Duration
 	multiplier   float64

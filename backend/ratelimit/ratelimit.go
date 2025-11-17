@@ -126,11 +126,11 @@ func (arl *AdaptiveRateLimiter) Allow(key string, defaultLimit rate.Limit, defau
 
 // TokenBucket implements a simple token bucket
 type TokenBucket struct {
-	capacity  int
-	tokens    int
+	capacity   int
+	tokens     int
 	refillRate int
 	lastRefill time.Time
-	mu        sync.Mutex
+	mu         sync.Mutex
 }
 
 // NewTokenBucket creates a new token bucket
