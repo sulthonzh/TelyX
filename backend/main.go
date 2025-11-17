@@ -31,8 +31,8 @@ func main() {
 
 	// Initialize structured logger
 	log := logger.New(cfg.LogLevel, true)
-	log.Info("Starting TelyX Backend v2.0", map[string]interface{}{
-		"version": "2.0.0",
+	log.Info("Starting TelyX Backend", map[string]interface{}{
+		"version": "1.0.0",
 		"port":    cfg.ServerPort,
 	})
 

@@ -48,7 +48,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 # Set labels
 LABEL org.opencontainers.image.title="TelyX Backend"
 LABEL org.opencontainers.image.description="Production-grade observability backend"
-LABEL org.opencontainers.image.version="2.0.0"
+LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.vendor="TelyX"
 LABEL org.opencontainers.image.licenses="MIT"
 

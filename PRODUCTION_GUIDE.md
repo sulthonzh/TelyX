@@ -399,7 +399,7 @@ spec:
     metadata:
       labels:
         app: telyx-backend
-        version: v2.0.0
+        version: v1.0.0
     spec:
       securityContext:
         runAsNonRoot: true
@@ -407,7 +407,7 @@ spec:
         fsGroup: 65534
       containers:
       - name: backend
-        image: telyx/backend:2.0.0
+        image: telyx/backend:1.0.0
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
@@ -466,7 +466,7 @@ docker-compose -f docker/docker-compose.production.yml up -d
   "memory": "1024",
   "containerDefinitions": [{
     "name": "backend",
-    "image": "telyx/backend:2.0.0",
+    "image": "telyx/backend:1.0.0",
     "portMappings": [{
       "containerPort": 8080,
       "protocol": "tcp"
@@ -605,4 +605,4 @@ For production support:
 ---
 
 **Last Updated**: 2025-11-17
-**Version**: 2.0.0
+**Version**: 1.0.0

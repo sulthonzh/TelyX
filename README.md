@@ -5,12 +5,12 @@
 </p>
 
 <p align="center">
-  <strong>Version 2.0</strong> - Now with Authentication, Advanced Security, Rate Limiting, Circuit Breakers, and SLO Monitoring
+  <strong>Version 1.0</strong> - Enterprise-Grade with Authentication, Advanced Security, Rate Limiting, Circuit Breakers, and SLO Monitoring
 </p>
 
 ---
 
-## ⭐ What's New in v2.0
+## ⭐ Features in v1.0
 
 ### 🔒 Security & Authentication
 - **API Key Authentication** - Secure API key management with SHA-256 hashing

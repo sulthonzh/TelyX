@@ -88,16 +88,16 @@ func (am *AuthManager) ValidateJWT(tokenString string) (*Claims, error) {
 	})
 
 	if err != nil {
+		// Check if it's an expiration error
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return nil, ErrExpiredToken
+		}
 		return nil, ErrInvalidToken
 	}
 
 	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
 		return nil, ErrInvalidToken
-	}
-
-	if claims.ExpiresAt != nil && claims.ExpiresAt.Time.Before(time.Now()) {
-		return nil, ErrExpiredToken
 	}
 
 	return claims, nil

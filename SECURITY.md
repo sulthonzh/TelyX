@@ -256,4 +256,4 @@ We would like to thank security researchers who have responsibly disclosed vulne
 ---
 
 **Last Updated**: 2025-11-17
-**Version**: 2.0.0
+**Version**: 1.0.0

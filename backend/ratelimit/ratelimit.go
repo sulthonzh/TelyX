@@ -112,14 +112,14 @@ func (arl *AdaptiveRateLimiter) SetLimit(key string, r rate.Limit, b int) {
 
 // Allow checks if a request is allowed with adaptive limits
 func (arl *AdaptiveRateLimiter) Allow(key string, defaultLimit rate.Limit, defaultBurst int) bool {
-	arl.mu.RLock()
+	arl.mu.Lock()
 	limiter, exists := arl.limiters[key]
-	arl.mu.RUnlock()
-
 	if !exists {
-		// Use default limiter
+		// Create and store default limiter
 		limiter = NewLimiter(defaultLimit, defaultBurst, time.Minute)
+		arl.limiters[key] = limiter
 	}
+	arl.mu.Unlock()
 
 	return limiter.Allow(key)
 }
