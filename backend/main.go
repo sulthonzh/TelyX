@@ -21,8 +21,23 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
 )
 
-const osURL = "http://opensearch:9200/logs/_doc"
-const osSearchURL = "http://opensearch:9200/logs/_search"
+var (
+	osURL      string
+	osSearchURL string
+)
+
+func init() {
+	osHost := getEnv("OPENSEARCH_HOST", "http://opensearch:9200")
+	osURL = osHost + "/logs/_doc"
+	osSearchURL = osHost + "/logs/_search"
+}
+
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
 
 // Prometheus metrics
 var (
