@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -28,7 +29,7 @@ var (
 			Name: "http_requests_total",
 			Help: "Total number of HTTP requests",
 		},
-		[]string{"path"},
+		[]string{"path", "method", "status"},
 	)
 	requestDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -36,7 +37,7 @@ var (
 			Help:    "Histogram of response time for HTTP requests",
 			Buckets: prometheus.DefBuckets,
 		},
-		[]string{"path"},
+		[]string{"path", "method"},
 	)
 )
 
@@ -56,7 +57,6 @@ func initTracer() (*trace.TracerProvider, error) {
 	tp := trace.NewTracerProvider(
 		trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(0.1))),
 		trace.WithBatcher(exporter),
-		trace.WithBatcher(exporter),
 		trace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String("telyx-backend"),
@@ -72,19 +72,25 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start).Seconds()
-		requestDuration.WithLabelValues("/logs").Observe(duration)
+		requestDuration.WithLabelValues("/logs", r.Method).Observe(duration)
 	}()
 
 	_, span := otel.Tracer("telyx-backend").Start(r.Context(), "logHandler")
 	defer span.End()
 
+	// Only accept POST requests
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error": "Method not allowed"}`, http.StatusMethodNotAllowed)
+		requestCount.WithLabelValues("/logs", r.Method, "405").Inc()
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	defer r.Body.Close()
 
 	var logData map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&logData); err != nil {
 		http.Error(w, `{"error": "Invalid log format"}`, http.StatusBadRequest)
-		requestCount.WithLabelValues("/logs").Inc()
+		requestCount.WithLabelValues("/logs", r.Method, "400").Inc()
 		span.RecordError(err)
 		span.SetAttributes(semconv.ExceptionMessageKey.String("Invalid log format"))
 		return
@@ -99,6 +105,7 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 	jsonData, err := json.Marshal(logData)
 	if err != nil {
 		http.Error(w, `{"error": "Internal server error"}`, http.StatusInternalServerError)
+		requestCount.WithLabelValues("/logs", r.Method, "500").Inc()
 		span.RecordError(err)
 		span.SetAttributes(semconv.ExceptionMessageKey.String("Failed to marshal log data"))
 		return
@@ -106,18 +113,28 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Send log data to OpenSearch
 	res, err := http.Post(osURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil || res.StatusCode >= 400 {
+	if err != nil {
 		http.Error(w, `{"error": "Failed to send log to OpenSearch"}`, http.StatusInternalServerError)
+		requestCount.WithLabelValues("/logs", r.Method, "500").Inc()
 		span.RecordError(err)
 		span.SetAttributes(semconv.ExceptionMessageKey.String("Failed to send log to OpenSearch"))
 		return
 	}
 	defer res.Body.Close()
+	// Drain the response body to ensure connection reuse
+	io.Copy(io.Discard, res.Body)
+
+	if res.StatusCode >= 400 {
+		http.Error(w, `{"error": "Failed to send log to OpenSearch"}`, http.StatusInternalServerError)
+		requestCount.WithLabelValues("/logs", r.Method, "500").Inc()
+		span.SetAttributes(semconv.ExceptionMessageKey.String(fmt.Sprintf("OpenSearch returned status %d", res.StatusCode)))
+		return
+	}
 
 	// Respond to the client
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(`{"status": "Log successfully ingested"}`))
-	requestCount.WithLabelValues("/logs").Inc()
+	requestCount.WithLabelValues("/logs", r.Method, "201").Inc()
 }
 
 // healthCheck responds with the service's health status
@@ -125,7 +142,7 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start).Seconds()
-		requestDuration.WithLabelValues("/health").Observe(duration)
+		requestDuration.WithLabelValues("/health", r.Method).Observe(duration)
 	}()
 
 	_, span := otel.Tracer("telyx-backend").Start(r.Context(), "healthCheck")
@@ -140,11 +157,12 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, `{"error": "Internal server error"}`, http.StatusInternalServerError)
+		requestCount.WithLabelValues("/health", r.Method, "500").Inc()
 		span.RecordError(err)
 		span.SetAttributes(semconv.ExceptionMessageKey.String("Failed to encode health response"))
 		return
 	}
-	requestCount.WithLabelValues("/health").Inc()
+	requestCount.WithLabelValues("/health", r.Method, "200").Inc()
 }
 
 func main() {
@@ -169,13 +187,14 @@ func main() {
 	}
 	defer func() { _ = tp.Shutdown(context.Background()) }()
 
-	http.Handle("/metrics", promhttp.Handler())
-	http.HandleFunc("/health", healthCheck)
-	http.HandleFunc("/logs", logHandler)
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/health", healthCheck)
+	mux.HandleFunc("/logs", logHandler)
 
 	port := ":8080"
 	log.Printf("Server is running on port %s...", port)
-	if err := http.ListenAndServe(port, nil); err != nil {
+	if err := http.ListenAndServe(port, mux); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }

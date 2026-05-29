@@ -1,0 +1,18 @@
+# Go
+backend/main
+backend/backend.log
+
+# Node
+frontend/node_modules/
+frontend/build/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
