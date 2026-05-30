@@ -138,10 +138,17 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 // logsSearchHandler queries logs from OpenSearch
 func logsSearchHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start).Seconds()
+		requestDuration.WithLabelValues("/logs/search").Observe(duration)
+	}()
+
 	_, span := otel.Tracer("telyx-backend").Start(r.Context(), "logsSearchHandler")
 	defer span.End()
 
 	w.Header().Set("Content-Type", "application/json")
+	defer func() { requestCount.WithLabelValues("/logs/search").Inc() }()
 
 	q := r.URL.Query().Get("q")
 	limit := 50
@@ -169,11 +176,17 @@ func logsSearchHandler(w http.ResponseWriter, r *http.Request) {
 
 	queryJSON, _ := json.Marshal(query)
 	res, err := http.Post(osSearchURL, "application/json", bytes.NewBuffer(queryJSON))
-	if err != nil || res.StatusCode >= 400 {
+	if err != nil {
 		http.Error(w, `{"error": "Failed to query OpenSearch"}`, http.StatusInternalServerError)
 		return
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode >= 400 {
+		io.Copy(io.Discard, res.Body)
+		http.Error(w, `{"error": "Failed to query OpenSearch"}`, http.StatusInternalServerError)
+		return
+	}
 
 	body, _ := io.ReadAll(res.Body)
 

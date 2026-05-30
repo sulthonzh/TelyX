@@ -5,11 +5,13 @@ services:
     container_name: opensearch
     environment:
       - discovery.type=single-node
-      - plugins.security.disabled=true
+      - DISABLE_SECURITY_PLUGIN=true
       - network.host=0.0.0.0
     ports:
       - "9200:9200"
       - "9600:9600" # OpenSearch performance analyzer
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
     networks:
       - telyx-net
 
@@ -26,7 +28,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     volumes:
-      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
     networks:
@@ -36,7 +38,7 @@ services:
     image: otel/opentelemetry-collector:0.115.1
     command: ["--config=/etc/otel-collector-config.yml"]
     volumes:
-      - ./docker/otel-collector-config.yml:/etc/otel-collector-config.yml
+      - ./otel-collector-config.yml:/etc/otel-collector-config.yml
     ports:
       - "4317:4317" # gRPC
       - "55681:55681" # HTTP
@@ -58,6 +60,9 @@ services:
       - "3000:3000"
     networks:
       - telyx-net
+
+volumes:
+  opensearch-data:
 
 networks:
   telyx-net:

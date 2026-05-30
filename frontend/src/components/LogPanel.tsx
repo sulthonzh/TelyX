@@ -41,11 +41,20 @@ const LogPanel: React.FC<LogPanelProps> = ({ apiBase }) => {
     }
   }, [apiBase, search, logs.length]);
 
+  const [isVisible, setIsVisible] = useState(true);
+
   useEffect(() => {
+    const onVis = () => setIsVisible(!document.hidden);
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
+  useEffect(() => {
+    if (!isVisible) return;
     fetchLogs();
     const interval = setInterval(fetchLogs, 10000);
     return () => clearInterval(interval);
-  }, [fetchLogs]);
+  }, [fetchLogs, isVisible]);
 
   const getLevelColor = (level?: string) => {
     if (!level) return "#94a3b8";
