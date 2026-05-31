@@ -9,7 +9,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -23,6 +25,12 @@ import (
 
 const osURL = "http://opensearch:9200/logs/_doc"
 const osSearchURL = "http://opensearch:9200/logs/_search"
+
+// osClient is a shared HTTP client with a timeout to prevent goroutine leaks
+// if OpenSearch is slow or unresponsive.
+var osClient = &http.Client{
+	Timeout: 10 * time.Second,
+}
 
 // Prometheus metrics
 var (
@@ -107,14 +115,21 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send log data to OpenSearch
-	res, err := http.Post(osURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil || res.StatusCode >= 400 {
+	res, err := osClient.Post(osURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
 		http.Error(w, `{"error": "Failed to send log to OpenSearch"}`, http.StatusInternalServerError)
 		span.RecordError(err)
 		span.SetAttributes(semconv.ExceptionMessageKey.String("Failed to send log to OpenSearch"))
 		return
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode >= 400 {
+		io.Copy(io.Discard, res.Body)
+		http.Error(w, `{"error": "Failed to send log to OpenSearch"}`, http.StatusInternalServerError)
+		span.RecordError(fmt.Errorf("opensearch returned status %d", res.StatusCode))
+		return
+	}
 
 	// Respond to the client
 	w.WriteHeader(http.StatusCreated)
@@ -168,8 +183,11 @@ func logsSearchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	queryJSON, _ := json.Marshal(query)
-	res, err := http.Post(osSearchURL, "application/json", bytes.NewBuffer(queryJSON))
+	res, err := osClient.Post(osSearchURL, "application/json", bytes.NewBuffer(queryJSON))
 	if err != nil || res.StatusCode >= 400 {
+		if res != nil {
+			io.Copy(io.Discard, res.Body)
+		}
 		http.Error(w, `{"error": "Failed to query OpenSearch"}`, http.StatusInternalServerError)
 		return
 	}
@@ -190,7 +208,7 @@ func logsSearchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.Unmarshal(body, &searchRes); err != nil {
-		w.Write(body) // return raw if parse fails
+		http.Error(w, `{"error": "Failed to parse OpenSearch response"}`, http.StatusInternalServerError)
 		return
 	}
 
@@ -236,7 +254,7 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 func main() {
 	// Configure logging
 	logFile := "backend.log"
-	file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatalf("Failed to open log file: %v", err)
 	}
@@ -255,14 +273,36 @@ func main() {
 	}
 	defer func() { _ = tp.Shutdown(context.Background()) }()
 
-	http.Handle("/metrics", promhttp.Handler())
-	http.HandleFunc("/health", corsMiddleware(healthCheck))
-	http.HandleFunc("/logs", corsMiddleware(logHandler))
-	http.HandleFunc("/logs/search", corsMiddleware(logsSearchHandler))
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/health", corsMiddleware(healthCheck))
+	mux.HandleFunc("/logs", corsMiddleware(logHandler))
+	mux.HandleFunc("/logs/search", corsMiddleware(logsSearchHandler))
 
-	port := ":8080"
-	log.Printf("Server is running on port %s...", port)
-	if err := http.ListenAndServe(port, nil); err != nil {
+	server := &http.Server{
+		Addr:         ":8080",
+		Handler:      mux,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Graceful shutdown on SIGINT/SIGTERM
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+		log.Println("Shutting down gracefully...")
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			log.Printf("Shutdown error: %v", err)
+		}
+	}()
+
+	log.Printf("Server is running on port %s...", server.Addr)
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Failed to start server: %v", err)
 	}
+	log.Println("Server stopped")
 }
