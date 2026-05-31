@@ -80,12 +80,14 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 	_, span := otel.Tracer("telyx-backend").Start(r.Context(), "logHandler")
 	defer span.End()
 
-	w.Header().Set("Content-Type", "application/json")
-	defer r.Body.Close()
+	// Limit request body to 1MB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	var logData map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&logData); err != nil {
-		http.Error(w, `{"error": "Invalid log format"}`, http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error": "Invalid log format"}`))
 		requestCount.WithLabelValues("/logs").Inc()
 		span.RecordError(err)
 		span.SetAttributes(semconv.ExceptionMessageKey.String("Invalid log format"))
@@ -100,23 +102,46 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 	// Convert log data to JSON
 	jsonData, err := json.Marshal(logData)
 	if err != nil {
-		http.Error(w, `{"error": "Internal server error"}`, http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "Internal server error"}`))
 		span.RecordError(err)
 		span.SetAttributes(semconv.ExceptionMessageKey.String("Failed to marshal log data"))
 		return
 	}
 
-	// Send log data to OpenSearch
-	res, err := http.Post(osURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil || res.StatusCode >= 400 {
-		http.Error(w, `{"error": "Failed to send log to OpenSearch"}`, http.StatusInternalServerError)
+	// Send log data to OpenSearch with request context for tracing
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, osURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "Internal server error"}`))
+		span.RecordError(err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "Failed to send log to OpenSearch"}`))
 		span.RecordError(err)
 		span.SetAttributes(semconv.ExceptionMessageKey.String("Failed to send log to OpenSearch"))
 		return
 	}
 	defer res.Body.Close()
 
+	if res.StatusCode >= 400 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "Failed to send log to OpenSearch"}`))
+		span.SetAttributes(semconv.ExceptionMessageKey.String("OpenSearch returned error status"))
+		return
+	}
+
 	// Respond to the client
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(`{"status": "Log successfully ingested"}`))
 	requestCount.WithLabelValues("/logs").Inc()
@@ -168,12 +193,32 @@ func logsSearchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	queryJSON, _ := json.Marshal(query)
-	res, err := http.Post(osSearchURL, "application/json", bytes.NewBuffer(queryJSON))
-	if err != nil || res.StatusCode >= 400 {
-		http.Error(w, `{"error": "Failed to query OpenSearch"}`, http.StatusInternalServerError)
+
+	// Propagate request context to OpenSearch call for tracing
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, osSearchURL, bytes.NewBuffer(queryJSON))
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "Internal server error"}`))
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "Failed to query OpenSearch"}`))
 		return
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode >= 400 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "Failed to query OpenSearch"}`))
+		return
+	}
 
 	body, _ := io.ReadAll(res.Body)
 
@@ -190,7 +235,9 @@ func logsSearchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.Unmarshal(body, &searchRes); err != nil {
-		w.Write(body) // return raw if parse fails
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "Failed to parse search results"}`))
 		return
 	}
 
