@@ -21,8 +21,11 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
 )
 
-const osURL = "http://opensearch:9200/logs/_doc"
-const osSearchURL = "http://opensearch:9200/logs/_search"
+const osBaseURL = "http://opensearch:9200"
+
+var osClient = &http.Client{
+	Timeout: 10 * time.Second,
+}
 
 // Prometheus metrics
 var (
@@ -107,14 +110,22 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send log data to OpenSearch
-	res, err := http.Post(osURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil || res.StatusCode >= 400 {
+	osURL := osBaseURL + "/logs/_doc"
+
+	res, err := osClient.Post(osURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
 		http.Error(w, `{"error": "Failed to send log to OpenSearch"}`, http.StatusInternalServerError)
 		span.RecordError(err)
-		span.SetAttributes(semconv.ExceptionMessageKey.String("Failed to send log to OpenSearch"))
 		return
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode >= 400 {
+		io.Copy(io.Discard, res.Body)
+		http.Error(w, `{"error": "Failed to send log to OpenSearch"}`, http.StatusInternalServerError)
+		span.RecordError(fmt.Errorf("opensearch returned status %d", res.StatusCode))
+		return
+	}
 
 	// Respond to the client
 	w.WriteHeader(http.StatusCreated)
@@ -167,13 +178,23 @@ func logsSearchHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	osSearchURL := osBaseURL + "/logs/_search"
+
 	queryJSON, _ := json.Marshal(query)
-	res, err := http.Post(osSearchURL, "application/json", bytes.NewBuffer(queryJSON))
-	if err != nil || res.StatusCode >= 400 {
+	res, err := osClient.Post(osSearchURL, "application/json", bytes.NewBuffer(queryJSON))
+	if err != nil {
 		http.Error(w, `{"error": "Failed to query OpenSearch"}`, http.StatusInternalServerError)
+		span.RecordError(err)
 		return
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode >= 400 {
+		// Drain body to reuse connection
+		io.Copy(io.Discard, res.Body)
+		http.Error(w, `{"error": "Failed to query OpenSearch"}`, http.StatusInternalServerError)
+		return
+	}
 
 	body, _ := io.ReadAll(res.Body)
 

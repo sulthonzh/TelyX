@@ -2,8 +2,10 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
+test('renders TelyX app header', () => {
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+  // The app should render without crashing
+  // Check for one of the tab buttons
+  const logsButton = screen.getByText(/logs/i);
+  expect(logsButton).toBeInTheDocument();
 });
