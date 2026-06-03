@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import _ from "lodash";
 
 interface LogEntry {
   timestamp?: string;
@@ -19,33 +20,27 @@ const LogPanel: React.FC<LogPanelProps> = ({ apiBase }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const fetchLogs = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const params = new URLSearchParams();
-      if (search) params.set("q", search);
-      params.set("limit", "50");
-
-      const res = await fetch(`${apiBase}/logs/search?${params}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setLogs(data.logs || []);
-      setTotal(data.total || 0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch logs");
-      // If backend is down, show empty state
-      if (!logs.length) setLogs([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [apiBase, search, logs.length]);
+  // Throttle log fetches to prevent infinite loops
+  const throttledFetchLogs = useCallback(
+    _.debounce(async () => {
+      try {
+        await fetchLogs();
+      } catch (err) {
+        // Error is handled in fetchLogs
+        console.warn("Failed to fetch logs:", err);
+      }
+    }, 500),
+    [fetchLogs]
+  );
 
   useEffect(() => {
-    fetchLogs();
-    const interval = setInterval(fetchLogs, 10000);
-    return () => clearInterval(interval);
-  }, [fetchLogs]);
+    throttledFetchLogs();
+    const interval = setInterval(throttledFetchLogs, 10000);
+    return () => {
+      clearInterval(interval);
+      throttledFetchLogs.cancel();
+    };
+  }, [throttledFetchLogs]);
 
   const getLevelColor = (level?: string) => {
     if (!level) return "#94a3b8";

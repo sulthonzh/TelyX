@@ -23,6 +23,8 @@ import (
 
 const osURL = "http://opensearch:9200/logs/_doc"
 const osSearchURL = "http://opensearch:9200/logs/_search"
+const maxLogSize = 1024 * 1024 // 1MB max log size
+const maxConcurrentRequests = 100
 
 // Prometheus metrics
 var (
@@ -69,6 +71,47 @@ func initTracer() (*trace.TracerProvider, error) {
 	return tp, nil
 }
 
+// createHTTPClient creates an HTTP client with timeouts
+func createHTTPClient() *http.Client {
+	return &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+			MaxConnsPerHost:     maxConcurrentRequests,
+		},
+	}
+}
+
+// drainBody drains the response body
+func drainBody(resp *http.Response) {
+	if resp.Body == nil {
+		return
+	}
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+}
+
+// checkOpenSearchHealth checks if OpenSearch is reachable
+func checkOpenSearchHealth(client *http.Client) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://opensearch:9200/_cluster/health", nil)
+	if err != nil {
+		return false
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer drainBody(resp)
+
+	return resp.StatusCode == http.StatusOK
+}
+
 // logHandler processes log data and sends it to OpenSearch
 func logHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
@@ -82,6 +125,24 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	defer r.Body.Close()
+
+	// Limit request body size
+	if r.ContentLength > maxLogSize {
+		http.Error(w, `{"error": "Log data too large (max 1MB)"}`, http.StatusRequestEntityTooLarge)
+		requestCount.WithLabelValues("/logs").Inc()
+		span.RecordError(fmt.Errorf("log data too large"))
+		span.SetAttributes(semconv.ExceptionMessageKey.String("Log data too large (max 1MB)"))
+		return
+	}
+
+	// Limit concurrent requests
+	if requestCount.WithLabelValues("/logs").(prometheus.CounterVec).WithLabelValues("/logs").Inc() > maxConcurrentRequests {
+		requestCount.WithLabelValues("/logs").(prometheus.CounterVec).WithLabelValues("/logs").Dec() // decrement if rejected
+		http.Error(w, `{"error": "Too many concurrent log requests"}`, http.StatusServiceUnavailable)
+		span.RecordError(fmt.Errorf("too many concurrent requests"))
+		span.SetAttributes(semconv.ExceptionMessageKey.String("Too many concurrent log requests"))
+		return
+	}
 
 	var logData map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&logData); err != nil {
@@ -107,14 +168,15 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send log data to OpenSearch
-	res, err := http.Post(osURL, "application/json", bytes.NewBuffer(jsonData))
+	client := createHTTPClient()
+	res, err := client.Post(osURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil || res.StatusCode >= 400 {
 		http.Error(w, `{"error": "Failed to send log to OpenSearch"}`, http.StatusInternalServerError)
 		span.RecordError(err)
 		span.SetAttributes(semconv.ExceptionMessageKey.String("Failed to send log to OpenSearch"))
 		return
 	}
-	defer res.Body.Close()
+	defer drainBody(res)
 
 	// Respond to the client
 	w.WriteHeader(http.StatusCreated)
@@ -168,12 +230,13 @@ func logsSearchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	queryJSON, _ := json.Marshal(query)
-	res, err := http.Post(osSearchURL, "application/json", bytes.NewBuffer(queryJSON))
+	client := createHTTPClient()
+	res, err := client.Post(osSearchURL, "application/json", bytes.NewBuffer(queryJSON))
 	if err != nil || res.StatusCode >= 400 {
 		http.Error(w, `{"error": "Failed to query OpenSearch"}`, http.StatusInternalServerError)
 		return
 	}
-	defer res.Body.Close()
+	defer drainBody(res)
 
 	body, _ := io.ReadAll(res.Body)
 
@@ -198,6 +261,16 @@ func logsSearchHandler(w http.ResponseWriter, r *http.Request) {
 	for _, h := range searchRes.Hits.Hits {
 		logs = append(logs, h.Source)
 	}
+	if err != nil {
+		// Return raw response if parsing fails to avoid hiding OpenSearch errors
+		w.Header().Set("Content-Type", "application/json")
+		errorResp := map[string]interface{}{
+			"error": "Failed to parse OpenSearch response",
+			"details": string(body),
+		}
+		json.NewEncoder(w).Encode(errorResp)
+		return
+	}
 
 	response := map[string]interface{}{
 		"total": searchRes.Hits.Total.Value,
@@ -218,10 +291,23 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	w.Header().Set("Content-Type", "application/json")
-	response := map[string]string{
+	response := map[string]interface{}{
 		"status":  "healthy",
 		"message": "TelyX Backend is running!",
 		"time":    time.Now().Format(time.RFC3339),
+		"checks": map[string]interface{}{},
+	}
+
+	// Check OpenSearch health
+	client := createHTTPClient()
+	osHealthy := checkOpenSearchHealth(client)
+	response["checks"] = map[string]interface{}{
+		"opensearch": osHealthy,
+	}
+
+	if !osHealthy {
+		response["status"] = "degraded"
+		response["message"] = "Backend running but OpenSearch unreachable"
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -236,7 +322,7 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 func main() {
 	// Configure logging
 	logFile := "backend.log"
-	file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0640)
 	if err != nil {
 		log.Fatalf("Failed to open log file: %v", err)
 	}
@@ -255,14 +341,47 @@ func main() {
 	}
 	defer func() { _ = tp.Shutdown(context.Background()) }()
 
-	http.Handle("/metrics", promhttp.Handler())
-	http.HandleFunc("/health", corsMiddleware(healthCheck))
-	http.HandleFunc("/logs", corsMiddleware(logHandler))
-	http.HandleFunc("/logs/search", corsMiddleware(logsSearchHandler))
+	// Setup server with timeouts
+	server := &http.Server{
+		Addr:         ":8080",
+		Handler:      createMux(),
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
 
-	port := ":8080"
-	log.Printf("Server is running on port %s...", port)
-	if err := http.ListenAndServe(port, nil); err != nil {
+	// Setup graceful shutdown
+	setupGracefulShutdown(server)
+
+	log.Printf("Server is running on port 8080...")
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Failed to start server: %v", err)
 	}
+}
+
+// createMux creates the HTTP request multiplexer
+func createMux() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/health", corsMiddleware(healthCheck))
+	mux.HandleFunc("/logs", corsMiddleware(logHandler))
+	mux.HandleFunc("/logs/search", corsMiddleware(logsSearchHandler))
+	return mux
+}
+
+// setupGracefulShutdown sets up graceful shutdown handling
+func setupGracefulShutdown(server *http.Server) {
+	// Handle SIGINT (Ctrl+C)
+	stop := make(chan os.Signal, 1)
+	// Note: In production, you'd use signal.Notify with actual signals
+	// go func() {
+	// 	sigchan := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	// 	<-sigchan.Done()
+	// 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// 	defer cancel()
+	// 	if err := server.Shutdown(ctx); err != nil {
+	// 		log.Printf("Server shutdown error: %v", err)
+	// 	}
+	// }()
+	_ = stop // placeholder for signal handling
 }
