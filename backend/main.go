@@ -138,6 +138,12 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 // logsSearchHandler queries logs from OpenSearch
 func logsSearchHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start).Seconds()
+		requestDuration.WithLabelValues("/logs/search").Observe(duration)
+	}()
+
 	_, span := otel.Tracer("telyx-backend").Start(r.Context(), "logsSearchHandler")
 	defer span.End()
 
@@ -169,13 +175,28 @@ func logsSearchHandler(w http.ResponseWriter, r *http.Request) {
 
 	queryJSON, _ := json.Marshal(query)
 	res, err := http.Post(osSearchURL, "application/json", bytes.NewBuffer(queryJSON))
-	if err != nil || res.StatusCode >= 400 {
+	if err != nil {
 		http.Error(w, `{"error": "Failed to query OpenSearch"}`, http.StatusInternalServerError)
+		requestCount.WithLabelValues("/logs/search").Inc()
+		span.RecordError(err)
 		return
 	}
 	defer res.Body.Close()
 
-	body, _ := io.ReadAll(res.Body)
+	if res.StatusCode >= 400 {
+		io.Copy(io.Discard, res.Body) // drain body before discarding
+		http.Error(w, `{"error": "Failed to query OpenSearch"}`, http.StatusInternalServerError)
+		requestCount.WithLabelValues("/logs/search").Inc()
+		span.RecordError(fmt.Errorf("opensearch returned status %d", res.StatusCode))
+		return
+	}
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		http.Error(w, `{"error": "Failed to read OpenSearch response"}`, http.StatusInternalServerError)
+		requestCount.WithLabelValues("/logs/search").Inc()
+		return
+	}
 
 	// Parse and flatten hits
 	var searchRes struct {
@@ -204,6 +225,7 @@ func logsSearchHandler(w http.ResponseWriter, r *http.Request) {
 		"logs":  logs,
 	}
 	json.NewEncoder(w).Encode(response)
+	requestCount.WithLabelValues("/logs/search").Inc()
 }
 
 // healthCheck responds with the service's health status
