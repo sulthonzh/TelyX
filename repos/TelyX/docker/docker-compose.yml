@@ -1,0 +1,117 @@
+version: "3.8"
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.18.0
+    container_name: opensearch
+    environment:
+      - discovery.type=single-node
+      - "plugins.security.disabled=true"
+      - "network.host=0.0.0.0"
+      - "cluster.name=telyx-cluster"
+      - "bootstrap.memory_lock=true"
+    ports:
+      - "9200:9200"
+      - "9600:9600" # OpenSearch performance analyzer
+    networks:
+      - telyx-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.18.0
+    container_name: opensearch-dashboards
+    ports:
+      - "5601:5601"
+    environment:
+      - OPENSEARCH_HOSTS=http://opensearch:9200
+      - "OPENSEARCH_SECURITY_ENABLED=false"
+    networks:
+      - telyx-net
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+  
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - telyx-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+  
+  otel-collector:
+    image: otel/opentelemetry-collector:0.115.1
+    command: ["--config=/etc/otel-collector-config.yml"]
+    volumes:
+      - ./docker/otel-collector-config.yml:/etc/otel-collector-config.yml
+    ports:
+      - "4317:4317" # gRPC
+      - "55681:55681" # HTTP
+    networks:
+      - telyx-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:55681/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+  
+  backend:
+    build:
+      context: ../backend
+    ports:
+      - "8080:8080"
+    networks:
+      - telyx-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    environment:
+      - OPENSEARCH_URL=http://opensearch:9200
+      - PROMETHEUS_PORT=8080
+    depends_on:
+      opensearch:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ../frontend
+    ports:
+      - "3000:3000"
+    networks:
+      - telyx-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    environment:
+      - REACT_APP_API_URL=http://localhost:8080
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  prometheus_data:
+    driver: local
+
+networks:
+  telyx-net:
+    driver: bridge
