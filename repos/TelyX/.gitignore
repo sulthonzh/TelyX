@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+frontend/build/
+frontend/dist/
+backend/telyx-backend
+
+# Generated TypeScript declarations
+*.d.ts
+
+# Logs
+*.log
+backend.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
