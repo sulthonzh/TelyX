@@ -34,12 +34,10 @@ const LogPanel: React.FC<LogPanelProps> = ({ apiBase }) => {
       setTotal(data.total || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch logs");
-      // If backend is down, show empty state
-      if (!logs.length) setLogs([]);
     } finally {
       setLoading(false);
     }
-  }, [apiBase, search, logs.length]);
+  }, [apiBase, search]);
 
   useEffect(() => {
     fetchLogs();

@@ -21,8 +21,17 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
 )
 
-const osURL = "http://opensearch:9200/logs/_doc"
-const osSearchURL = "http://opensearch:9200/logs/_search"
+var (
+	osURL       = envOrDefault("OPENSEARCH_URL", "http://opensearch:9200") + "/logs/_doc"
+	osSearchURL = envOrDefault("OPENSEARCH_URL", "http://opensearch:9200") + "/logs/_search"
+)
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
 
 // Prometheus metrics
 var (
@@ -144,6 +153,11 @@ func logsSearchHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	q := r.URL.Query().Get("q")
+	if len(q) > 500 {
+		http.Error(w, `{"error": "Search query too long (max 500 chars)"}`, http.StatusBadRequest)
+		return
+	}
+
 	limit := 50
 	if l := r.URL.Query().Get("limit"); l != "" {
 		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 200 {
