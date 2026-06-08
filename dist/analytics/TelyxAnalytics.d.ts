@@ -59,7 +59,7 @@ export declare class TelyxAnalytics {
         modelUsage: Record<string, number>;
     };
     /**
-     * Get time-based analytics
+     * Get time-based analytics with fixed indexing
      */
     getTimeSeriesData(timeRange?: '1h' | '24h' | '7d'): {
         requestsPerHour: {

@@ -5,7 +5,10 @@ export declare class Telyx {
     private httpClient;
     private batch;
     private flushTimer?;
+    private flushing;
+    private _flushPromise?;
     private agentWrapper?;
+    private shutdownHandler?;
     constructor(config: TelyxConfig);
     /**
      * Track an agent method with automatic timing and success/failure detection
@@ -36,6 +39,10 @@ export declare class Telyx {
      */
     flush(): Promise<void>;
     /**
+     * Internal flush implementation with proper race condition handling
+     */
+    private _flushInternal;
+    /**
      * Check if batch size has been exceeded and flush if necessary
      */
     private checkBatchSize;
@@ -47,6 +54,11 @@ export declare class Telyx {
      * Stop the flush timer and clean up
      */
     destroy(): Promise<void>;
+    /**
+     * Register a shutdown handler so buffered telemetry isn't silently lost
+     * if the process exits without calling destroy().
+     */
+    private registerShutdownHandler;
     /**
      * Sanitize input for privacy/size reasons
      */

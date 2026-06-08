@@ -113,7 +113,7 @@ describe('Telyx', () => {
 
   describe('Sampling', () => {
     it('should skip recording when sampleRate is 0', () => {
-      const noSample = new Telyx({ (fix: flush race condition, broken trackMethod next(), getTimeSeriesData indexing)
+      const noSample = new Telyx({
         agentName: 'test-agent',
         environment: 'test',
         sampleRate: 0.0,
@@ -126,6 +126,29 @@ describe('Telyx', () => {
       expect(batch.events).toHaveLength(0);
       expect(batch.metrics).toHaveLength(0);
       noSample.destroy();
+    });
+
+    it('should sample correctly when sampleRate is 0.5', async () => {
+      const sampleTest = new Telyx({
+        agentName: 'test-agent',
+        environment: 'test',
+        sampleRate: 0.5,
+        enableConsole: false,
+      });
+
+      // Record multiple events to test probabilistic sampling
+      const sampleSize = 100;
+      for (let i = 0; i < sampleSize; i++) {
+        sampleTest.recordEvent('test_event');
+      }
+
+      const batch = getBatch(sampleTest);
+      // With 0.5 sample rate, we expect roughly half the events to be recorded
+      // Allow for some variance due to randomness
+      const recordedCount = batch.events.length;
+      expect(recordedCount).toBeGreaterThan(sampleSize * 0.3); // At least 30%
+      expect(recordedCount).toBeLessThan(sampleSize * 0.7); // At most 70%
+      await sampleTest.destroy();
     });
   });
 

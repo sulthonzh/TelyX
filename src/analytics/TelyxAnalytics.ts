@@ -186,7 +186,7 @@ export class TelyxAnalytics {
   }
 
   /**
-   * Get time-based analytics
+   * Get time-based analytics with fixed indexing
    */
   public getTimeSeriesData(timeRange: '1h' | '24h' | '7d' = '24h'): {
     requestsPerHour: { timestamp: string; count: number }[];
@@ -202,8 +202,8 @@ export class TelyxAnalytics {
     const errorRatePerHour: { timestamp: string; rate: number; _errorCount: number }[] = [];
     const averageResponseTimePerHour: { timestamp: string; time: number }[] = [];
 
-    for (let i = bucketCount - 1; i >= 0; i--) {
-      const bucketStart = new Date(now.getTime() - i * bucketMs);
+    for (let i = 0; i < bucketCount; i++) {
+      const bucketStart = new Date(now.getTime() - (bucketCount - 1 - i) * bucketMs);
       const timeKey = timeRange === '1h'
         ? bucketStart.toISOString().substring(14, 19) // HH:MM
         : bucketStart.toISOString().substring(0, 13); // YYYY-MM-DDTHH
@@ -213,27 +213,28 @@ export class TelyxAnalytics {
       averageResponseTimePerHour.push({ timestamp: timeKey, time: 0 });
     }
 
-    // Populate data by assigning each event to its bucket
+    // Populate data by assigning each event to its correct bucket
     this.events.forEach(event => {
       const eventTime = new Date(event.timestamp).getTime();
-      const offsetMs = now.getTime() - eventTime;
-      const offsetBuckets = Math.floor(offsetMs / bucketMs);
-
+      const timeDiffMs = now.getTime() - eventTime;
+      
       // Skip events outside the time range
-      if (offsetBuckets >= bucketCount || offsetBuckets < 0) return;
+      if (timeDiffMs < 0 || timeDiffMs >= bucketCount * bucketMs) return;
 
-      // Bucket index: 0 = oldest, bucketCount-1 = current
-      const index = bucketCount - 1 - offsetBuckets;
-      if (index < 0 || index >= bucketCount) return;
+      // Calculate correct bucket index (0 = oldest, bucketCount-1 = current)
+      const bucketIndex = Math.floor(timeDiffMs / bucketMs);
+      const index = bucketCount - 1 - bucketIndex;
+      
+      if (index >= 0 && index < bucketCount) {
+        requestsPerHour[index].count++;
 
-      requestsPerHour[index].count++;
+        if (event.success === false) {
+          errorRatePerHour[index]._errorCount++;
+        }
 
-      if (event.success === false) {
-        errorRatePerHour[index]._errorCount++;
-      }
-
-      if (event.duration != null) {
-        requestsPerHour[index]._totalDuration += event.duration;
+        if (event.duration != null) {
+          requestsPerHour[index]._totalDuration += event.duration;
+        }
       }
     });
 

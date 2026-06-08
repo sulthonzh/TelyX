@@ -11,19 +11,25 @@ class TelyxAnalytics {
      * Add events from telemetry batch
      */
     addEvents(events) {
-        this.events.push(...events);
+        for (const event of events) {
+            this.events.push(event);
+        }
     }
     /**
      * Add metrics from telemetry batch
      */
     addMetrics(metrics) {
-        this.metrics.push(...metrics);
+        for (const metric of metrics) {
+            this.metrics.push(metric);
+        }
     }
     /**
      * Add errors from telemetry batch
      */
     addErrors(errors) {
-        this.errors.push(...errors);
+        for (const error of errors) {
+            this.errors.push(error);
+        }
     }
     /**
      * Get performance metrics for a specific method
@@ -46,8 +52,8 @@ class TelyxAnalytics {
         const failedCalls = methodEvents.filter(event => !event.success).length;
         return {
             averageDuration: durations.reduce((sum, duration) => sum + duration, 0) / durations.length,
-            minDuration: Math.min(...durations),
-            maxDuration: Math.max(...durations),
+            minDuration: durations.reduce((min, d) => (d < min ? d : min), durations[0]),
+            maxDuration: durations.reduce((max, d) => (d > max ? d : max), durations[0]),
             successRate: successfulCalls / methodEvents.length,
             totalCalls: methodEvents.length,
             successfulCalls,
@@ -131,66 +137,61 @@ class TelyxAnalytics {
         };
     }
     /**
-     * Get time-based analytics
+     * Get time-based analytics with fixed indexing
      */
     getTimeSeriesData(timeRange = '24h') {
         const now = new Date();
-        const hours = timeRange === '1h' ? 1 : timeRange === '24h' ? 24 : 24 * 7;
-        const interval = timeRange === '1h' ? 'minute' : 'hour';
-        // Initialize time series data
+        const bucketCount = timeRange === '1h' ? 60 : timeRange === '24h' ? 24 : 24 * 7;
+        const bucketMs = timeRange === '1h' ? 60 * 1000 : 60 * 60 * 1000;
+        // Initialize time series buckets
         const requestsPerHour = [];
         const errorRatePerHour = [];
         const averageResponseTimePerHour = [];
-        for (let i = hours - 1; i >= 0; i--) {
-            const timestamp = new Date(now.getTime() - i * (timeRange === '1h' ? 60 * 60 * 1000 : 60 * 60 * 1000));
+        for (let i = 0; i < bucketCount; i++) {
+            const bucketStart = new Date(now.getTime() - (bucketCount - 1 - i) * bucketMs);
             const timeKey = timeRange === '1h'
-                ? timestamp.toISOString().substring(14, 19) // HH:MM
-                : timestamp.toISOString().substring(0, 13); // YYYY-MM-DDTHH
-            requestsPerHour.push({
-                timestamp: timeKey,
-                count: 0,
-            });
-            errorRatePerHour.push({
-                timestamp: timeKey,
-                rate: 0,
-            });
-            averageResponseTimePerHour.push({
-                timestamp: timeKey,
-                time: 0,
-            });
+                ? bucketStart.toISOString().substring(14, 19) // HH:MM
+                : bucketStart.toISOString().substring(0, 13); // YYYY-MM-DDTHH
+            requestsPerHour.push({ timestamp: timeKey, count: 0, _totalDuration: 0 });
+            errorRatePerHour.push({ timestamp: timeKey, rate: 0, _errorCount: 0 });
+            averageResponseTimePerHour.push({ timestamp: timeKey, time: 0 });
         }
-        // Populate data
+        // Populate data by assigning each event to its correct bucket
         this.events.forEach(event => {
-            const eventTime = new Date(event.timestamp);
-            const timeDiff = now.getTime() - eventTime.getTime();
-            const hoursAgo = Math.floor(timeDiff / (60 * 60 * 1000));
-            if (hoursAgo < hours) {
-                const index = timeRange === '1h' ? hours - 1 - hoursAgo : Math.floor(hoursAgo / 24);
-                if (index >= 0 && index < hours) {
-                    requestsPerHour[index].count++;
-                    if (!event.success) {
-                        errorRatePerHour[index].rate++;
-                    }
-                    if (event.duration) {
-                        averageResponseTimePerHour[index].time += event.duration;
-                    }
+            const eventTime = new Date(event.timestamp).getTime();
+            const timeDiffMs = now.getTime() - eventTime;
+            // Skip events outside the time range
+            if (timeDiffMs < 0 || timeDiffMs >= bucketCount * bucketMs)
+                return;
+            // Calculate correct bucket index (0 = oldest, bucketCount-1 = current)
+            const bucketIndex = Math.floor(timeDiffMs / bucketMs);
+            const index = bucketCount - 1 - bucketIndex;
+            if (index >= 0 && index < bucketCount) {
+                requestsPerHour[index].count++;
+                if (event.success === false) {
+                    errorRatePerHour[index]._errorCount++;
+                }
+                if (event.duration != null) {
+                    requestsPerHour[index]._totalDuration += event.duration;
                 }
             }
         });
-        // Calculate averages
-        averageResponseTimePerHour.forEach(point => {
-            const eventsInPeriod = requestsPerHour.find(r => r.timestamp === point.timestamp)?.count || 1;
-            point.time = eventsInPeriod > 0 ? point.time / eventsInPeriod : 0;
-        });
-        // Calculate error rates
-        requestsPerHour.forEach((point, index) => {
-            if (point.count > 0) {
-                errorRatePerHour[index].rate = errorRatePerHour[index].rate / point.count;
-            }
-        });
+        // Calculate averages and rates
+        for (let i = 0; i < bucketCount; i++) {
+            const count = requestsPerHour[i].count;
+            averageResponseTimePerHour[i].time = count > 0
+                ? requestsPerHour[i]._totalDuration / count
+                : 0;
+            errorRatePerHour[i].rate = count > 0
+                ? errorRatePerHour[i]._errorCount / count
+                : 0;
+        }
+        // Strip internal fields
+        const cleanRequests = requestsPerHour.map(({ _totalDuration, ...rest }) => rest);
+        const cleanErrors = errorRatePerHour.map(({ _errorCount, ...rest }) => rest);
         return {
-            requestsPerHour,
-            errorRatePerHour,
+            requestsPerHour: cleanRequests,
+            errorRatePerHour: cleanErrors,
             averageResponseTimePerHour,
         };
     }
@@ -209,8 +210,8 @@ class TelyxAnalytics {
         if (this.events.length === 0)
             return 0;
         const timestamps = this.events.map(event => new Date(event.timestamp).getTime());
-        const minTime = Math.min(...timestamps);
-        const maxTime = Math.max(...timestamps);
+        const minTime = timestamps.reduce((min, t) => (t < min ? t : min), timestamps[0]);
+        const maxTime = timestamps.reduce((max, t) => (t > max ? t : max), timestamps[0]);
         return maxTime - minTime;
     }
 }
