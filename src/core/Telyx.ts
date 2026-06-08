@@ -54,7 +54,7 @@ export class Telyx {
       const shouldSample = Math.random() < this.config.sampleRate;
 
       if (!shouldSample) {
-        // Create a proper next function that resolves with the input
+        // Create a next function that resolves with the input
         const next = () => Promise.resolve(input as T);
         return fn(input, next);
       }
@@ -62,9 +62,10 @@ export class Telyx {
       const start = Date.now();
 
       try {
-        // Create a proper next function that resolves with the input
-        const next = () => Promise.resolve(input as T);
-        const result = await fn(input, next);
+        // Create a next function that resolves with the actual result
+        let result: T;
+        const next = () => Promise.resolve(result as T);
+        result = await fn(input, next);
         this.recordSuccess(methodName, Date.now() - start, { input: this.sanitizeInput(input) });
         return result;
       } catch (err) {
@@ -179,9 +180,15 @@ export class Telyx {
     return new Proxy(agent, {
       get: (target, prop) => {
         if (typeof target[prop] === 'function') {
-          return this.trackMethod(String(prop), async (input: any, next: () => any) => {
-            return target[prop](input);
+          // Create a wrapper that preserves the original function signature
+          const originalMethod = target[prop];
+          const trackedMethod = this.trackMethod(String(prop), async (input: any, next: () => any) => {
+            // Call the original method with the input
+            return originalMethod.call(target, input);
           });
+          
+          // Return the tracked method
+          return trackedMethod;
         }
         return target[prop];
       },
@@ -327,12 +334,22 @@ export class Telyx {
    * Sanitize input for privacy/size reasons
    */
   private sanitizeInput(input: any): any {
+    // Handle null/undefined
+    if (input === null || input === undefined) {
+      return String(input);
+    }
+    
+    // Handle strings
     if (typeof input === 'string') {
       return input.substring(0, 100) + (input.length > 100 ? '...' : '');
     }
+    
+    // Handle objects (including arrays)
     if (typeof input === 'object') {
       return '[object]';
     }
+    
+    // Handle numbers, booleans, etc.
     return input;
   }
 }

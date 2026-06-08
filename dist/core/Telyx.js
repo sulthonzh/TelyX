@@ -42,15 +42,16 @@ class Telyx {
         return async (input) => {
             const shouldSample = Math.random() < this.config.sampleRate;
             if (!shouldSample) {
-                // Create a proper next function that resolves with the input
+                // Create a next function that resolves with the input
                 const next = () => Promise.resolve(input);
                 return fn(input, next);
             }
             const start = Date.now();
             try {
-                // Create a proper next function that resolves with the input
-                const next = () => Promise.resolve(input);
-                const result = await fn(input, next);
+                // Create a next function that resolves with the actual result
+                let result;
+                const next = () => Promise.resolve(result);
+                result = await fn(input, next);
                 this.recordSuccess(methodName, Date.now() - start, { input: this.sanitizeInput(input) });
                 return result;
             }
@@ -150,9 +151,14 @@ class Telyx {
         return new Proxy(agent, {
             get: (target, prop) => {
                 if (typeof target[prop] === 'function') {
-                    return this.trackMethod(String(prop), async (input, next) => {
-                        return target[prop](input);
+                    // Create a wrapper that preserves the original function signature
+                    const originalMethod = target[prop];
+                    const trackedMethod = this.trackMethod(String(prop), async (input, next) => {
+                        // Call the original method with the input
+                        return originalMethod.call(target, input);
                     });
+                    // Return the tracked method
+                    return trackedMethod;
                 }
                 return target[prop];
             },
@@ -284,12 +290,19 @@ class Telyx {
      * Sanitize input for privacy/size reasons
      */
     sanitizeInput(input) {
+        // Handle null/undefined
+        if (input === null || input === undefined) {
+            return String(input);
+        }
+        // Handle strings
         if (typeof input === 'string') {
             return input.substring(0, 100) + (input.length > 100 ? '...' : '');
         }
+        // Handle objects (including arrays)
         if (typeof input === 'object') {
             return '[object]';
         }
+        // Handle numbers, booleans, etc.
         return input;
     }
 }
