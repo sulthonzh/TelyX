@@ -231,7 +231,7 @@ export class TelyxAnalytics {
       const hoursAgo = Math.floor(timeDiff / (60 * 60 * 1000));
 
       if (hoursAgo < hours) {
-        const index = timeRange === '1h' ? hours - 1 - hoursAgo : Math.floor(hoursAgo / 24);
+        const index = timeRange === '1h' ? hours - 1 - hoursAgo : hoursAgo;
         if (index >= 0 && index < hours) {
           requestsPerHour[index].count++;
 
