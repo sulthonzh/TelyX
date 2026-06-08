@@ -10,6 +10,7 @@ export class Telyx {
   private batch: TelemetryBatch;
   private flushTimer?: NodeJS.Timeout;
   private agentWrapper?: any;
+  private shutdownHandler?: () => Promise<void>;
 
   constructor(config: TelyxConfig) {
     this.config = {
@@ -38,6 +39,7 @@ export class Telyx {
     };
 
     this.startFlushTimer();
+    this.registerShutdownHandler();
   }
 
   /**
@@ -191,17 +193,26 @@ export class Telyx {
       return;
     }
 
-    const batchToSend = { ...this.batch };
-    
+    // Deep-snapshot: copy arrays so concurrent additions don't leak into the POST
+    // and aren't lost when we clear the batch after success.
+    const batchToSend: TelemetryBatch = {
+      events: this.batch.events.slice(),
+      metrics: this.batch.metrics.slice(),
+      errors: this.batch.errors.slice(),
+    };
+
+    // Remove only the items we're about to send; keep anything added since snapshot.
+    const sentEvents = batchToSend.events.length;
+    const sentMetrics = batchToSend.metrics.length;
+    const sentErrors = batchToSend.errors.length;
+
     try {
       await this.httpClient.post('/telemetry', batchToSend);
-      
-      // Clear the batch after successful send
-      this.batch = {
-        events: [],
-        metrics: [],
-        errors: [],
-      };
+
+      // Trim only the items we actually sent
+      this.batch.events.splice(0, sentEvents);
+      this.batch.metrics.splice(0, sentMetrics);
+      this.batch.errors.splice(0, sentErrors);
       
       if (this.config.enableConsole) {
         console.log(`[Telyx] Flushed ${batchToSend.events.length} events, ${batchToSend.metrics.length} metrics, ${batchToSend.errors.length} errors`);
@@ -232,6 +243,11 @@ export class Telyx {
     this.flushTimer = setInterval(() => {
       this.flush();
     }, this.config.flushInterval);
+    // Don't keep the process alive just for the flush timer.
+    // If the user wants to keep it alive, they should call destroy() explicitly.
+    if (this.flushTimer && typeof (this.flushTimer as NodeJS.Timeout).unref === 'function') {
+      (this.flushTimer as NodeJS.Timeout).unref();
+    }
   }
 
   /**
@@ -242,8 +258,24 @@ export class Telyx {
       clearInterval(this.flushTimer);
       this.flushTimer = undefined;
     }
+    if (this.shutdownHandler) {
+      process.removeListener('beforeExit', this.shutdownHandler);
+      this.shutdownHandler = undefined;
+    }
     
     await this.flush();
+  }
+
+  /**
+   * Register a shutdown handler so buffered telemetry isn't silently lost
+   * if the process exits without calling destroy().
+   */
+  private registerShutdownHandler(): void {
+    this.shutdownHandler = async () => {
+      process.removeListener('beforeExit', this.shutdownHandler!);
+      await this.destroy();
+    };
+    process.on('beforeExit', this.shutdownHandler);
   }
 
   /**
