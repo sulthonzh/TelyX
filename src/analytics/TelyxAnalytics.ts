@@ -9,21 +9,27 @@ export class TelyxAnalytics {
    * Add events from telemetry batch
    */
   public addEvents(events: TelyxEvent[]): void {
-    this.events.push(...events);
+    for (const event of events) {
+      this.events.push(event);
+    }
   }
 
   /**
    * Add metrics from telemetry batch
    */
   public addMetrics(metrics: TelyxMetric[]): void {
-    this.metrics.push(...metrics);
+    for (const metric of metrics) {
+      this.metrics.push(metric);
+    }
   }
 
   /**
    * Add errors from telemetry batch
    */
   public addErrors(errors: TelyxError[]): void {
-    this.errors.push(...errors);
+    for (const error of errors) {
+      this.errors.push(error);
+    }
   }
 
   /**
@@ -60,8 +66,8 @@ export class TelyxAnalytics {
 
     return {
       averageDuration: durations.reduce((sum, duration) => sum + duration, 0) / durations.length,
-      minDuration: Math.min(...durations),
-      maxDuration: Math.max(...durations),
+      minDuration: durations.reduce((min, d) => (d < min ? d : min), durations[0]),
+      maxDuration: durations.reduce((max, d) => (d > max ? d : max), durations[0]),
       successRate: successfulCalls / methodEvents.length,
       totalCalls: methodEvents.length,
       successfulCalls,
@@ -276,8 +282,8 @@ export class TelyxAnalytics {
     if (this.events.length === 0) return 0;
 
     const timestamps = this.events.map(event => new Date(event.timestamp).getTime());
-    const minTime = Math.min(...timestamps);
-    const maxTime = Math.max(...timestamps);
+    const minTime = timestamps.reduce((min, t) => (t < min ? t : min), timestamps[0]);
+    const maxTime = timestamps.reduce((max, t) => (t > max ? t : max), timestamps[0]);
     
     return maxTime - minTime;
   }
