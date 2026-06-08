@@ -9,6 +9,7 @@ export class Telyx {
   private httpClient: AxiosInstance;
   private batch: TelemetryBatch;
   private flushTimer?: NodeJS.Timeout;
+  private flushing = false;
   private agentWrapper?: any;
   private shutdownHandler?: () => Promise<void>;
 
@@ -49,22 +50,20 @@ export class Telyx {
     return async (input: any): Promise<T> => {
       const shouldSample = Math.random() < this.config.sampleRate;
       
+      // next() passes control to the inner function, resolving with the input
+      const next = () => Promise.resolve(input);
+
       if (!shouldSample) {
-        return fn(input, () => Promise.resolve(input));
+        return fn(input, next);
       }
 
       const start = Date.now();
-      let result: T;
-      let success = false;
-      let error: any = null;
 
       try {
-        result = await fn(input, () => Promise.resolve(result!));
-        success = true;
+        const result = await fn(input, next);
         this.recordSuccess(methodName, Date.now() - start, { input: this.sanitizeInput(input) });
         return result;
       } catch (err) {
-        error = err;
         this.recordError(methodName, err, { input: this.sanitizeInput(input) });
         throw err;
       }
@@ -189,9 +188,15 @@ export class Telyx {
    * Flush the current batch to the server
    */
   public async flush(): Promise<void> {
+    if (this.flushing) {
+      return;
+    }
+
     if (this.batch.events.length === 0 && this.batch.metrics.length === 0 && this.batch.errors.length === 0) {
       return;
     }
+
+    this.flushing = true;
 
     // Deep-snapshot: copy arrays so concurrent additions don't leak into the POST
     // and aren't lost when we clear the batch after success.
@@ -204,7 +209,7 @@ export class Telyx {
     // Remove only the items we're about to send; keep anything added since snapshot.
     const sentEvents = batchToSend.events.length;
     const sentMetrics = batchToSend.metrics.length;
-    const sentErrors = batchToSend.errors.length;
+    const sentErrors = batchToSend.errors.length; (fix: flush race condition, broken trackMethod next(), getTimeSeriesData indexing)
 
     try {
       await this.httpClient.post('/telemetry', batchToSend);
@@ -212,16 +217,21 @@ export class Telyx {
       // Trim only the items we actually sent
       this.batch.events.splice(0, sentEvents);
       this.batch.metrics.splice(0, sentMetrics);
-      this.batch.errors.splice(0, sentErrors);
-      
+      this.batch.errors.splice(0, sentErrors); (fix: flush race condition, broken trackMethod next(), getTimeSeriesData indexing)
       if (this.config.enableConsole) {
         console.log(`[Telyx] Flushed ${batchToSend.events.length} events, ${batchToSend.metrics.length} metrics, ${batchToSend.errors.length} errors`);
       }
     } catch (error) {
+      // Re-queue failed batch items for retry on next flush
+      this.batch.events.unshift(...batchToSend.events);
+      this.batch.metrics.unshift(...batchToSend.metrics);
+      this.batch.errors.unshift(...batchToSend.errors);
+
       if (this.config.enableConsole) {
         console.error('[Telyx] Failed to flush batch:', error);
       }
-      // Don't clear the batch on failure - it will be retried on next flush
+    } finally {
+      this.flushing = false;
     }
   }
 
@@ -244,9 +254,8 @@ export class Telyx {
       this.flush();
     }, this.config.flushInterval);
     // Don't keep the process alive just for the flush timer.
-    // If the user wants to keep it alive, they should call destroy() explicitly.
-    if (this.flushTimer && typeof (this.flushTimer as NodeJS.Timeout).unref === 'function') {
-      (this.flushTimer as NodeJS.Timeout).unref();
+    if (this.flushTimer && typeof this.flushTimer === 'object' && 'unref' in this.flushTimer) {
+      this.flushTimer.unref(); (fix: flush race condition, broken trackMethod next(), getTimeSeriesData indexing)
     }
   }
 

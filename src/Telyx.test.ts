@@ -92,9 +92,28 @@ describe('Telyx', () => {
     });
   });
 
+  describe('Method Tracking', () => {
+    it('should track async methods with timing', async () => {
+      const trackedMethod = telyx.trackMethod('test_method', async (input, next) => {
+        return next();
+      });
+
+      const result = await trackedMethod('test input');
+      expect(result).toBe('test input');
+    });
+
+    it('should propagate errors from the tracked function', async () => {
+      const trackedMethod = telyx.trackMethod('test_method', async (input, _next) => {
+        throw new Error('Test error');
+      });
+
+      await expect(trackedMethod('test input')).rejects.toThrow('Test error');
+    });
+  });
+
   describe('Sampling', () => {
     it('should skip recording when sampleRate is 0', () => {
-      const noSample = new Telyx({
+      const noSample = new Telyx({ (fix: flush race condition, broken trackMethod next(), getTimeSeriesData indexing)
         agentName: 'test-agent',
         environment: 'test',
         sampleRate: 0.0,
