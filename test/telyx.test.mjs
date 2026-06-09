@@ -239,3 +239,72 @@ describe('TelyxMiddleware', () => {
     t.destroy();
   });
 });
+
+// ─── TelyxAnalytics: Time Series ───
+describe('TelyxAnalytics TimeSeries', () => {
+  it('getTimeSeriesData returns correct bucket count for 1h', () => {
+    const a = new TelyxAnalytics();
+    const ts = a.getTimeSeriesData('1h');
+    assert.equal(ts.requestsPerHour.length, 60);
+    assert.equal(ts.errorRatePerHour.length, 60);
+    assert.equal(ts.averageResponseTimePerHour.length, 60);
+  });
+
+  it('getTimeSeriesData returns correct bucket count for 24h', () => {
+    const a = new TelyxAnalytics();
+    const ts = a.getTimeSeriesData('24h');
+    assert.equal(ts.requestsPerHour.length, 24);
+  });
+
+  it('getTimeSeriesData returns correct bucket count for 7d', () => {
+    const a = new TelyxAnalytics();
+    const ts = a.getTimeSeriesData('7d');
+    assert.equal(ts.requestsPerHour.length, 24 * 7);
+  });
+
+  it('getTimeSeriesData populates buckets from events', () => {
+    const a = new TelyxAnalytics();
+    const now = new Date();
+    a.addEvents([
+      { timestamp: now.toISOString(), agent: 'a', environment: 't', event: 'method_call', method: 'test', duration: 100, success: true, metadata: {} },
+      { timestamp: now.toISOString(), agent: 'a', environment: 't', event: 'method_call', method: 'test', duration: 200, success: false, metadata: {} },
+    ]);
+    const ts = a.getTimeSeriesData('1h');
+    // Last bucket should have 2 requests
+    const last = ts.requestsPerHour[ts.requestsPerHour.length - 1];
+    assert.equal(last.count, 2);
+    // Error rate in last bucket should be 0.5
+    const lastErr = ts.errorRatePerHour[ts.errorRatePerHour.length - 1];
+    assert.equal(lastErr.rate, 0.5);
+    // Average response time should be 150
+    const lastAvg = ts.averageResponseTimePerHour[ts.averageResponseTimePerHour.length - 1];
+    assert.equal(lastAvg.time, 150);
+  });
+
+  it('getTimeSeriesData ignores events outside time range', () => {
+    const a = new TelyxAnalytics();
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    a.addEvents([
+      { timestamp: twoHoursAgo, agent: 'a', environment: 't', event: 'method_call', method: 'test', duration: 100, success: true, metadata: {} },
+    ]);
+    const ts = a.getTimeSeriesData('1h');
+    const total = ts.requestsPerHour.reduce((sum, b) => sum + b.count, 0);
+    assert.equal(total, 0);
+  });
+});
+
+// ─── Telyx: track() proxy ───
+describe('Telyx track() proxy', () => {
+  it('wraps agent methods with telemetry', async () => {
+    const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });
+    const agent = {
+      greet: (name) => `hello ${name}`,
+      value: 42,
+    };
+    const tracked = t.track(agent);
+    assert.equal(tracked.value, 42);
+    const result = await tracked.greet('world');
+    assert.equal(result, 'hello world');
+    t.destroy();
+  });
+});
