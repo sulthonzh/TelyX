@@ -10,12 +10,12 @@ export class TelyxMiddleware {
   /**
    * Express-like middleware for HTTP requests
    */
-  public httpRequestMiddleware = (req: any, res: any, next: any) => {
+  public httpRequestMiddleware = (req: { method: string; url: string; get: (header: string) => string; ip?: string }, res: { statusCode: number; send: (body: unknown) => void; [key: string]: unknown }, next: () => void) => {
     // Prevent double-wrapping if middleware is applied multiple times
-    if ((res as any)._telyxWrapped) {
+    if ((res as Record<string, boolean>)._telyxWrapped) {
       return next();
     }
-    (res as any)._telyxWrapped = true;
+    (res as Record<string, boolean>)._telyxWrapped = true;
 
     const start = Date.now();
 
@@ -29,7 +29,7 @@ export class TelyxMiddleware {
 
     // Track response
     const originalSend = res.send;
-    res.send = (body: any) => {
+    res.send = (body: unknown) => {
       const duration = Date.now() - start;
       const statusCode = res.statusCode;
       
@@ -50,11 +50,11 @@ export class TelyxMiddleware {
   /**
    * Database query middleware
    */
-  public databaseQueryMiddleware = (query: string, params?: any) => {
+  public databaseQueryMiddleware = (query: string) => {
     const start = Date.now();
 
     return {
-      end: (result: any, error?: any) => {
+      end: (result: unknown, error?: unknown) => {
         const duration = Date.now() - start;
         
         if (error) {
@@ -63,9 +63,12 @@ export class TelyxMiddleware {
             duration,
           });
         } else {
+          const resultObj = result as Record<string, unknown>;
+          const affectedRows = resultObj?.affectedRows as number | undefined;
+          const rowCount = resultObj?.rowCount as number | undefined;
           this.telyx.recordSuccess('database_query', duration, {
             query: this.sanitizeQuery(query),
-            rowsAffected: result?.affectedRows || result?.rowCount || 0,
+            rowsAffected: affectedRows || rowCount || 0,
           });
         }
       },
@@ -75,11 +78,11 @@ export class TelyxMiddleware {
   /**
    * Cache operation middleware
    */
-  public cacheOperationMiddleware = (operation: string, key: string, value?: any) => {
+  public cacheOperationMiddleware = (operation: string, key: string) => {
     const start = Date.now();
 
     return {
-      end: (result: any, error?: any) => {
+      end: (result: unknown, error?: unknown) => {
         const duration = Date.now() - start;
         
         if (error) {
@@ -112,7 +115,7 @@ export class TelyxMiddleware {
     });
 
     return {
-      end: (response: any, error?: any) => {
+      end: (response: unknown, error?: unknown) => {
         const duration = Date.now() - start;
         
         if (error) {
@@ -122,15 +125,21 @@ export class TelyxMiddleware {
             duration,
           });
         } else {
+          const responseObj = response as Record<string, unknown>;
+          const usage = responseObj?.usage as Record<string, unknown> | undefined;
+          const content = responseObj?.content as string | null | undefined;
+          const tokensUsed = usage && typeof usage === 'object' && 'total_tokens' in usage ? (usage.total_tokens as number) : 0;
+          const responseLength = content ? content.length : 0;
+          
           this.telyx.recordSuccess('ai_api_call', duration, {
             provider,
             model,
-            tokensUsed: response?.usage?.total_tokens || 0,
-            responseLength: response?.content?.length || 0,
+            tokensUsed,
+            responseLength,
           });
           
           // Track token usage as a metric
-          if (response?.usage?.total_tokens) {
+          if (response && typeof response === 'object' && 'usage' in response && response.usage && typeof response.usage === 'object' && 'total_tokens' in response.usage && typeof response.usage.total_tokens === 'number') {
             this.telyx.recordMetric('tokens_used', response.usage.total_tokens, {
               provider,
               model,

@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import axios, { AxiosInstance } from 'axios';
 import { TelyxConfig, TelyxEvent, TelyxMetric, TelyxError, TelemetryBatch } from '../types';
 
 // Re-export types for convenience
@@ -11,7 +11,7 @@ export class Telyx {
   private flushTimer?: NodeJS.Timeout;
   private flushing = false;
   private _flushPromise?: Promise<void>;
-  private agentWrapper?: any;
+  private agentWrapper?: unknown;
   private shutdownHandler?: () => Promise<void>;
 
   constructor(config: TelyxConfig) {
@@ -49,8 +49,8 @@ export class Telyx {
   /**
    * Track an agent method with automatic timing and success/failure detection
    */
-  public trackMethod<T>(methodName: string, fn: (input: any, next: () => Promise<T>) => Promise<T>): any {
-    return async (input: any): Promise<T> => {
+  public trackMethod<T>(methodName: string, fn: (input: unknown, next: () => Promise<T>) => Promise<T>): (input: unknown) => Promise<T> {
+    return async (input: unknown): Promise<T> => {
       const shouldSample = Math.random() < this.config.sampleRate;
 
       if (!shouldSample) {
@@ -79,7 +79,7 @@ export class Telyx {
   /**
    * Record a custom event
    */
-  public recordEvent(eventName: string, metadata?: Record<string, any>): void {
+  public recordEvent(eventName: string, metadata?: Record<string, unknown>): void {
     const shouldSample = Math.random() < this.config.sampleRate;
     
     if (!shouldSample) return;
@@ -103,7 +103,7 @@ export class Telyx {
   /**
    * Record a metric
    */
-  public recordMetric(metricName: string, value: number, metadata?: Record<string, any>): void {
+  public recordMetric(metricName: string, value: number, metadata?: Record<string, unknown>): void {
     const shouldSample = Math.random() < this.config.sampleRate;
     
     if (!shouldSample) return;
@@ -128,7 +128,7 @@ export class Telyx {
   /**
    * Record a success event
    */
-  public recordSuccess(methodName: string, duration: number, metadata?: Record<string, any>): void {
+  public recordSuccess(methodName: string, duration: number, metadata?: Record<string, unknown>): void {
     const event: TelyxEvent = {
       timestamp: new Date().toISOString(),
       agent: this.config.agentName,
@@ -151,16 +151,16 @@ export class Telyx {
   /**
    * Record an error
    */
-  public recordError(methodName: string, error: any, metadata?: Record<string, any>): void {
+  public recordError(methodName: string, error: unknown, metadata?: Record<string, unknown>): void {
     const errorEvent: TelyxError = {
       timestamp: new Date().toISOString(),
       agent: this.config.agentName,
       environment: this.config.environment,
-      error: error.message || 'Unknown error',
-      stack: error.stack,
+      error: (error as Error)?.message || 'Unknown error',
+      stack: (error as Error)?.stack,
       context: {
         method: methodName,
-        ...metadata,
+        ...(metadata as Record<string, unknown>),
       },
     };
 
@@ -175,15 +175,21 @@ export class Telyx {
   /**
    * Wrap an agent with telemetry
    */
-  public track(agent: any): any {
+  public track(agent: unknown): unknown {
     this.agentWrapper = agent;
     
-    return new Proxy(agent, {
+    return new Proxy(agent as Record<string, unknown>, {
       get: (target, prop) => {
+        if (typeof prop === 'symbol') {
+          // Don't wrap symbol properties, return them as-is
+          return (target as any)[prop];
+        }
+        
         if (typeof target[prop] === 'function') {
           // Create a wrapper that preserves the original function signature
-          const originalMethod = target[prop];
-          const trackedMethod = this.trackMethod(String(prop), async (input: any, next: () => any) => {
+          const originalMethod = target[prop] as (input: unknown) => unknown;
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const trackedMethod = this.trackMethod(String(prop), async (input: unknown, next: () => Promise<unknown>) => {
             // Call the original method with the input
             return originalMethod.call(target, input);
           });
@@ -191,7 +197,7 @@ export class Telyx {
           // Return the tracked method
           return trackedMethod;
         }
-        return target[prop];
+        return target[prop as string];
       },
     });
   }
@@ -334,7 +340,7 @@ export class Telyx {
   /**
    * Sanitize input for privacy/size reasons
    */
-  private sanitizeInput(input: any): any {
+  private sanitizeInput(input: unknown): unknown {
     // Handle null/undefined
     if (input === null || input === undefined) {
       return String(input);

@@ -25,8 +25,7 @@
     ],
     "typeRoots": [
       "./node_modules/@types"
-    ],
-    "ignoreDeprecations": "6.0"
+    ]
   },
   "include": [
     "src/**/*"
@@ -35,6 +34,7 @@
     "node_modules",
     "dist",
     "**/*.test.ts",
-    "**/*.spec.ts"
+    "**/*.spec.ts",
+    "frontend/**/*"
   ]
 }

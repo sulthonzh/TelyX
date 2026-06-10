@@ -85,7 +85,7 @@ export class TelyxAnalytics {
     errorRate: number;
     averageResponseTime: number;
     methodPerformance: Record<string, unknown>;
-  } {
+    } {
     const totalEvents = this.events.length;
     const successfulEvents = this.events.filter(event => event.success).length;
     const failedEvents = this.events.filter(event => !event.success).length;
@@ -98,7 +98,7 @@ export class TelyxAnalytics {
 
     // Get performance for all methods
     const methodNames = [...new Set(this.events.map(event => event.method).filter((methodName): methodName is string => Boolean(methodName)))];
-    const methodPerformance: Record<string, any> = {};
+    const methodPerformance: Record<string, unknown> = {};
     
     methodNames.forEach(methodName => {
       methodPerformance[methodName] = this.getMethodPerformance(methodName);
@@ -123,18 +123,18 @@ export class TelyxAnalytics {
     errorTypes: Record<string, number>;
     recentErrors: TelyxError[];
     errorRate: number;
-  } {
+    } {
     const totalEvents = this.events.length;
     const errorByMethod: Record<string, number> = {};
     const errorTypes: Record<string, number> = {};
 
     this.errors.forEach(error => {
       // Count errors by method
-      const method = error.context?.method || 'unknown';
+      const method = (error.context as Record<string, unknown>)?.method as string || 'unknown';
       errorByMethod[method] = (errorByMethod[method] || 0) + 1;
 
       // Count errors by type
-      const errorType = error.error.split(':')[0] || 'Unknown';
+      const errorType = typeof error.error === 'string' ? error.error.split(':')[0] || 'Unknown' : 'Unknown';
       errorTypes[errorType] = (errorTypes[errorType] || 0) + 1;
     });
 
@@ -156,7 +156,7 @@ export class TelyxAnalytics {
     totalApiCalls: number;
     providerUsage: Record<string, number>;
     modelUsage: Record<string, number>;
-  } {
+    } {
     const aiEvents = this.events.filter(event => event.event === 'ai_api_call');
     const tokenMetrics = this.metrics.filter(metric => metric.metric === 'tokens_used');
 
@@ -165,8 +165,8 @@ export class TelyxAnalytics {
     const modelUsage: Record<string, number> = {};
 
     aiEvents.forEach(event => {
-      const provider = (event.metadata as Record<string, unknown>)?.provider || 'unknown';
-      const model = (event.metadata as Record<string, unknown>)?.model || 'unknown';
+      const provider = (event.metadata as Record<string, unknown>)?.provider as string || 'unknown';
+      const model = (event.metadata as Record<string, unknown>)?.model as string || 'unknown';
       
       providerUsage[provider] = (providerUsage[provider] || 0) + 1;
       modelUsage[model] = (modelUsage[model] || 0) + 1;
@@ -250,7 +250,9 @@ export class TelyxAnalytics {
     }
 
     // Strip internal fields
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const cleanRequests = requestsPerHour.map(({ _totalDuration, ...rest }) => rest);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const cleanErrors = errorRatePerHour.map(({ _errorCount, ...rest }) => rest);
 
     return {
@@ -272,7 +274,7 @@ export class TelyxAnalytics {
     avgResponseTime: number;
     topMethods: { method: string; calls: number; avgDuration: number }[];
     recentErrors: TelyxError[];
-  } {
+    } {
     const totalEvents = this.events.length;
     const successful = this.events.filter(e => e.success === true).length;
     const failed = this.events.filter(e => e.success === false).length;

@@ -16,7 +16,7 @@ export interface TelyxEvent {
   method?: string;
   duration?: number;
   success?: boolean;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface TelyxMetric {
@@ -25,7 +25,7 @@ export interface TelyxMetric {
   environment: string;
   metric: string;
   value: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface TelyxError {
@@ -34,7 +34,7 @@ export interface TelyxError {
   environment: string;
   error: string;
   stack?: string;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
 }
 
 export interface TelemetryBatch {
@@ -46,5 +46,5 @@ export interface TelemetryBatch {
 export interface AgentWrapper {
   sendMessage: (input: string) => Promise<string>;
   generateContent: (prompt: string) => Promise<string>;
-  [key: string]: any;
+  [key: string]: unknown;
 }
