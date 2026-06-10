@@ -196,6 +196,77 @@ class TelyxAnalytics {
         };
     }
     /**
+     * Get a quick summary of system health — one object for dashboards, CI, alerts.
+     */
+    getSummary() {
+        const totalEvents = this.events.length;
+        const successful = this.events.filter(e => e.success === true).length;
+        const failed = this.events.filter(e => e.success === false).length;
+        const withDuration = this.events.filter(e => e.duration !== undefined);
+        const avgResponseTime = withDuration.length > 0
+            ? withDuration.reduce((s, e) => s + e.duration, 0) / withDuration.length
+            : 0;
+        // Top methods by call count
+        const methodCounts = {};
+        for (const e of this.events) {
+            if (!e.method)
+                continue;
+            if (!methodCounts[e.method])
+                methodCounts[e.method] = { calls: 0, totalDuration: 0 };
+            methodCounts[e.method].calls++;
+            if (e.duration !== undefined)
+                methodCounts[e.method].totalDuration += e.duration;
+        }
+        const topMethods = Object.entries(methodCounts)
+            .sort((a, b) => b[1].calls - a[1].calls)
+            .slice(0, 10)
+            .map(([method, d]) => ({ method, calls: d.calls, avgDuration: d.calls > 0 ? d.totalDuration / d.calls : 0 }));
+        return {
+            totalEvents,
+            totalErrors: this.errors.length,
+            totalMetrics: this.metrics.length,
+            successRate: totalEvents > 0 ? successful / totalEvents : 1,
+            errorRate: totalEvents > 0 ? failed / totalEvents : 0,
+            avgResponseTime,
+            topMethods,
+            recentErrors: this.errors.slice(-5),
+        };
+    }
+    /**
+     * Render a markdown report of the telemetry data — useful for PR comments and dashboards.
+     */
+    toMarkdown() {
+        const summary = this.getSummary();
+        const lines = [];
+        lines.push('# Telyx Telemetry Report');
+        lines.push('');
+        lines.push(`- **Total Events:** ${summary.totalEvents}`);
+        lines.push(`- **Errors:** ${summary.totalErrors}`);
+        lines.push(`- **Metrics:** ${summary.totalMetrics}`);
+        lines.push(`- **Success Rate:** ${(summary.successRate * 100).toFixed(1)}%`);
+        lines.push(`- **Avg Response Time:** ${summary.avgResponseTime.toFixed(0)}ms`);
+        if (summary.topMethods.length > 0) {
+            lines.push('');
+            lines.push('## Top Methods');
+            lines.push('');
+            lines.push('| Method | Calls | Avg Duration |');
+            lines.push('|--------|-------|-------------|');
+            for (const m of summary.topMethods) {
+                lines.push(`| ${m.method} | ${m.calls} | ${m.avgDuration.toFixed(0)}ms |`);
+            }
+        }
+        if (summary.recentErrors.length > 0) {
+            lines.push('');
+            lines.push('## Recent Errors');
+            lines.push('');
+            for (const err of summary.recentErrors) {
+                lines.push(`- **${err.error}** (${err.context?.method || 'unknown'})`);
+            }
+        }
+        lines.push('');
+        return lines.join('\n');
+    }
+    /**
      * Clear all data
      */
     clear() {

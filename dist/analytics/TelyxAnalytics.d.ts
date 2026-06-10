@@ -76,6 +76,27 @@ export declare class TelyxAnalytics {
         }[];
     };
     /**
+     * Get a quick summary of system health — one object for dashboards, CI, alerts.
+     */
+    getSummary(): {
+        totalEvents: number;
+        totalErrors: number;
+        totalMetrics: number;
+        successRate: number;
+        errorRate: number;
+        avgResponseTime: number;
+        topMethods: {
+            method: string;
+            calls: number;
+            avgDuration: number;
+        }[];
+        recentErrors: TelyxError[];
+    };
+    /**
+     * Render a markdown report of the telemetry data — useful for PR comments and dashboards.
+     */
+    toMarkdown(): string;
+    /**
      * Clear all data
      */
     clear(): void;

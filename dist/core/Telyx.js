@@ -48,10 +48,11 @@ class Telyx {
             }
             const start = Date.now();
             try {
-                // Create a next function that resolves with the actual result
-                let result;
-                const next = () => Promise.resolve(result);
-                result = await fn(input, next);
+                // Create a next function that resolves with the input (consistent with non-sampled path)
+                // Note: result is not yet available when next() is called synchronously inside fn,
+                // so we pass input through, matching the non-sampled behavior.
+                const next = () => Promise.resolve(input);
+                const result = await fn(input, next);
                 this.recordSuccess(methodName, Date.now() - start, { input: this.sanitizeInput(input) });
                 return result;
             }

@@ -5,7 +5,7 @@ export declare class TelyxMiddleware {
     /**
      * Express-like middleware for HTTP requests
      */
-    httpRequestMiddleware: (req: any, res: any, next: any) => void;
+    httpRequestMiddleware: (req: any, res: any, next: any) => any;
     /**
      * Database query middleware
      */

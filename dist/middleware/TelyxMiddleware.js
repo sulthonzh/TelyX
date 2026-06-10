@@ -7,6 +7,11 @@ class TelyxMiddleware {
          * Express-like middleware for HTTP requests
          */
         this.httpRequestMiddleware = (req, res, next) => {
+            // Prevent double-wrapping if middleware is applied multiple times
+            if (res._telyxWrapped) {
+                return next();
+            }
+            res._telyxWrapped = true;
             const start = Date.now();
             // Track the request
             this.telyx.recordEvent('http_request', {
@@ -36,10 +41,6 @@ class TelyxMiddleware {
          */
         this.databaseQueryMiddleware = (query, params) => {
             const start = Date.now();
-            this.telyx.recordEvent('database_query_start', {
-                query: this.sanitizeQuery(query),
-                paramsCount: params ? Object.keys(params).length : 0,
-            });
             return {
                 end: (result, error) => {
                     const duration = Date.now() - start;
@@ -63,11 +64,6 @@ class TelyxMiddleware {
          */
         this.cacheOperationMiddleware = (operation, key, value) => {
             const start = Date.now();
-            this.telyx.recordEvent('cache_operation', {
-                operation,
-                key,
-                hasValue: value !== undefined,
-            });
             return {
                 end: (result, error) => {
                     const duration = Date.now() - start;

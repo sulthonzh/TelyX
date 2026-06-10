@@ -308,3 +308,65 @@ describe('Telyx track() proxy', () => {
     t.destroy();
   });
 });
+
+// ─── TelyxAnalytics: getSummary + toMarkdown ───
+describe('TelyxAnalytics getSummary & toMarkdown', () => {
+  it('getSummary returns correct overview', () => {
+    const a = new TelyxAnalytics();
+    a.addEvents([
+      { timestamp: new Date().toISOString(), agent: 'a', environment: 't', event: 'call', method: 'fetch', duration: 100, success: true },
+      { timestamp: new Date().toISOString(), agent: 'a', environment: 't', event: 'call', method: 'fetch', duration: 200, success: true },
+      { timestamp: new Date().toISOString(), agent: 'a', environment: 't', event: 'call', method: 'save', duration: 300, success: false },
+    ]);
+    a.addMetrics([{ timestamp: new Date().toISOString(), agent: 'a', environment: 't', metric: 'cpu', value: 42 }]);
+    a.addErrors([{ timestamp: new Date().toISOString(), agent: 'a', environment: 't', error: 'TimeoutError', context: { method: 'save' } }]);
+
+    const s = a.getSummary();
+    assert.equal(s.totalEvents, 3);
+    assert.equal(s.totalMetrics, 1);
+    assert.equal(s.totalErrors, 1);
+    assert.equal(s.successRate, 2 / 3);
+    assert.equal(s.errorRate, 1 / 3);
+    assert.equal(s.avgResponseTime, 200); // (100+200+300)/3
+    assert.equal(s.topMethods.length, 2);
+    assert.equal(s.topMethods[0].method, 'fetch');
+    assert.equal(s.topMethods[0].calls, 2);
+    assert.equal(s.topMethods[1].method, 'save');
+    assert.equal(s.recentErrors.length, 1);
+  });
+
+  it('getSummary returns safe defaults with no data', () => {
+    const a = new TelyxAnalytics();
+    const s = a.getSummary();
+    assert.equal(s.totalEvents, 0);
+    assert.equal(s.successRate, 1); // no events = perfect health
+    assert.equal(s.errorRate, 0);
+    assert.equal(s.avgResponseTime, 0);
+    assert.equal(s.topMethods.length, 0);
+  });
+
+  it('toMarkdown produces valid report', () => {
+    const a = new TelyxAnalytics();
+    a.addEvents([
+      { timestamp: new Date().toISOString(), agent: 'a', environment: 't', event: 'call', method: 'process', duration: 50, success: true },
+      { timestamp: new Date().toISOString(), agent: 'a', environment: 't', event: 'call', method: 'process', duration: 150, success: false },
+    ]);
+    a.addErrors([{ timestamp: new Date().toISOString(), agent: 'a', environment: 't', error: 'NetworkError', context: { method: 'process' } }]);
+
+    const md = a.toMarkdown();
+    assert.ok(md.includes('# Telyx Telemetry Report'));
+    assert.ok(md.includes('Total Events'));
+    assert.ok(md.includes('Top Methods'));
+    assert.ok(md.includes('process'));
+    assert.ok(md.includes('Recent Errors'));
+    assert.ok(md.includes('NetworkError'));
+  });
+
+  it('toMarkdown omits methods/errors sections when empty', () => {
+    const a = new TelyxAnalytics();
+    const md = a.toMarkdown();
+    assert.ok(md.includes('# Telyx Telemetry Report'));
+    assert.ok(!md.includes('Top Methods'));
+    assert.ok(!md.includes('Recent Errors'));
+  });
+});
