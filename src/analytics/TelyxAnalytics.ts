@@ -84,7 +84,7 @@ export class TelyxAnalytics {
     successRate: number;
     errorRate: number;
     averageResponseTime: number;
-    methodPerformance: Record<string, any>;
+    methodPerformance: Record<string, unknown>;
   } {
     const totalEvents = this.events.length;
     const successfulEvents = this.events.filter(event => event.success).length;
@@ -165,8 +165,8 @@ export class TelyxAnalytics {
     const modelUsage: Record<string, number> = {};
 
     aiEvents.forEach(event => {
-      const provider = event.metadata?.provider || 'unknown';
-      const model = event.metadata?.model || 'unknown';
+      const provider = (event.metadata as Record<string, unknown>)?.provider || 'unknown';
+      const model = (event.metadata as Record<string, unknown>)?.model || 'unknown';
       
       providerUsage[provider] = (providerUsage[provider] || 0) + 1;
       modelUsage[model] = (modelUsage[model] || 0) + 1;
