@@ -6,6 +6,8 @@ export interface TelyxConfig {
   maxBatchSize?: number;
   flushInterval?: number;
   enableConsole?: boolean;
+  maxAnalyticsRetention?: number; // Maximum analytics data points to retain (default: 10000)
+  maxHistoryAgeMs?: number; // Maximum age of data to retain in milliseconds (default: 7 days)
 }
 
 export interface TelyxEvent {
