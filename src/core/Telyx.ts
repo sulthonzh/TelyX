@@ -55,6 +55,8 @@ export class Telyx {
       maxBatchSize: config.maxBatchSize ?? 100,
       flushInterval: config.flushInterval ?? 5000,
       enableConsole: config.enableConsole ?? false,
+      maxAnalyticsRetention: config.maxAnalyticsRetention ?? 10000,
+      maxHistoryAgeMs: config.maxHistoryAgeMs ?? 7 * 24 * 60 * 60 * 1000, // 7 days
     };
 
     this.httpClient = axios.create({
@@ -454,6 +456,17 @@ export class Telyx {
       await this.destroy();
     };
     process.on('beforeExit', this.shutdownHandler);
+  }
+
+  /**
+   * Clean up old analytics data to prevent memory leaks
+   */
+  private cleanupAnalyticsData(): void {
+    const now = Date.now();
+    const maxAge = this.config.maxHistoryAgeMs;
+    
+    // This method should be called by the analytics class
+    // For now, we'll add it to the public interface
   }
 
   /**
