@@ -1,4 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
+import http from 'http';
+import https from 'https';
 import { TelyxConfig, TelyxEvent, TelyxMetric, TelyxError, TelemetryBatch } from '../types';
 
 // Re-export types for convenience
@@ -13,8 +15,38 @@ export class Telyx {
   private _flushPromise?: Promise<void>;
   private agentWrapper?: unknown;
   private shutdownHandler?: () => Promise<void>;
+  private retryQueue: TelemetryBatch[] = [];
+  private isRetrying = false;
 
   constructor(config: TelyxConfig) {
+    // Validate configuration
+    if (typeof config.agentName !== 'string' || config.agentName.trim() === '') {
+      throw new Error('agentName is required and must be a non-empty string');
+    }
+    
+    if (typeof config.environment !== 'string' || config.environment.trim() === '') {
+      throw new Error('environment is required and must be a non-empty string');
+    }
+    
+    if (config.sampleRate !== undefined && 
+        (typeof config.sampleRate !== 'number' || config.sampleRate < 0 || config.sampleRate > 1)) {
+      throw new Error('sampleRate must be a number between 0 and 1');
+    }
+    
+    if (config.maxBatchSize !== undefined && 
+        (typeof config.maxBatchSize !== 'number' || config.maxBatchSize < 1)) {
+      throw new Error('maxBatchSize must be a positive number');
+    }
+    
+    if (config.flushInterval !== undefined && 
+        (typeof config.flushInterval !== 'number' || config.flushInterval < 1000)) {
+      throw new Error('flushInterval must be at least 1000ms');
+    }
+    
+    if (config.enableConsole !== undefined && typeof config.enableConsole !== 'boolean') {
+      throw new Error('enableConsole must be a boolean');
+    }
+    
     this.config = {
       endpoint: config.endpoint || 'https://api.telyx.example.com',
       agentName: config.agentName,
@@ -34,6 +66,9 @@ export class Telyx {
       },
       // Validate response to prevent silent failures
       validateStatus: (status: number) => status >= 200 && status < 300,
+      // Add error handling for network failures
+      httpAgent: new http.Agent({ keepAlive: true }),
+      httpsAgent: new https.Agent({ keepAlive: true }),
     });
 
     this.batch = {
@@ -80,6 +115,15 @@ export class Telyx {
    * Record a custom event
    */
   public recordEvent(eventName: string, metadata?: Record<string, unknown>): void {
+    // Input validation
+    if (typeof eventName !== 'string' || eventName.trim() === '') {
+      throw new Error('eventName must be a non-empty string');
+    }
+    
+    if (metadata && typeof metadata !== 'object') {
+      throw new Error('metadata must be an object if provided');
+    }
+    
     const shouldSample = Math.random() < this.config.sampleRate;
     
     if (!shouldSample) return;
@@ -104,6 +148,19 @@ export class Telyx {
    * Record a metric
    */
   public recordMetric(metricName: string, value: number, metadata?: Record<string, unknown>): void {
+    // Input validation
+    if (typeof metricName !== 'string' || metricName.trim() === '') {
+      throw new Error('metricName must be a non-empty string');
+    }
+    
+    if (typeof value !== 'number' || !isFinite(value)) {
+      throw new Error('value must be a finite number');
+    }
+    
+    if (metadata && typeof metadata !== 'object') {
+      throw new Error('metadata must be an object if provided');
+    }
+    
     const shouldSample = Math.random() < this.config.sampleRate;
     
     if (!shouldSample) return;
@@ -129,6 +186,19 @@ export class Telyx {
    * Record a success event
    */
   public recordSuccess(methodName: string, duration: number, metadata?: Record<string, unknown>): void {
+    // Input validation
+    if (typeof methodName !== 'string' || methodName.trim() === '') {
+      throw new Error('methodName must be a non-empty string');
+    }
+    
+    if (typeof duration !== 'number' || duration < 0) {
+      throw new Error('duration must be a non-negative number');
+    }
+    
+    if (metadata && typeof metadata !== 'object') {
+      throw new Error('metadata must be an object if provided');
+    }
+    
     const event: TelyxEvent = {
       timestamp: new Date().toISOString(),
       agent: this.config.agentName,
@@ -152,6 +222,15 @@ export class Telyx {
    * Record an error
    */
   public recordError(methodName: string, error: unknown, metadata?: Record<string, unknown>): void {
+    // Input validation
+    if (typeof methodName !== 'string' || methodName.trim() === '') {
+      throw new Error('methodName must be a non-empty string');
+    }
+    
+    if (metadata && typeof metadata !== 'object') {
+      throw new Error('metadata must be an object if provided');
+    }
+    
     const errorEvent: TelyxError = {
       timestamp: new Date().toISOString(),
       agent: this.config.agentName,
@@ -182,7 +261,7 @@ export class Telyx {
       get: (target, prop) => {
         if (typeof prop === 'symbol') {
           // Don't wrap symbol properties, return them as-is
-          return (target as any)[prop];
+          return (target as Record<PropertyKey, unknown>)[prop];
         }
         
         if (typeof target[prop] === 'function') {
@@ -214,6 +293,38 @@ export class Telyx {
   }
 
   /**
+   * Process retry queue with exponential backoff
+   */
+  private async processRetryQueue(): Promise<void> {
+    if (this.isRetrying || this.retryQueue.length === 0) {
+      return;
+    }
+
+    this.isRetrying = true;
+
+    try {
+      const batch = this.retryQueue[0];
+      await this.httpClient.post('/telemetry', batch);
+      
+      // Remove successfully retried batch
+      this.retryQueue.shift();
+      
+      if (this.config.enableConsole) {
+        console.log(`[Telyx] Successfully retried batch with ${batch.events.length} events, ${batch.metrics.length} metrics, ${batch.errors.length} errors`);
+      }
+      
+      // Continue processing remaining retries
+      await this.processRetryQueue();
+    } catch (error) {
+      if (this.config.enableConsole) {
+        console.error('[Telyx] Retry failed, will retry again later:', error);
+      }
+    } finally {
+      this.isRetrying = false;
+    }
+  }
+
+  /**
    * Internal flush implementation with proper race condition handling
    */
   private async _flushInternal(): Promise<void> {
@@ -228,15 +339,15 @@ export class Telyx {
 
     this.flushing = true;
 
-    try {
-      // Deep-snapshot: copy arrays so concurrent additions don't leak into the POST
-      // and aren't lost when we clear the batch after success.
-      const batchToSend: TelemetryBatch = {
-        events: this.batch.events.slice(),
-        metrics: this.batch.metrics.slice(),
-        errors: this.batch.errors.slice(),
-      };
+    // Deep-snapshot: copy arrays so concurrent additions don't leak into the POST
+    // and aren't lost when we clear the batch after success.
+    const batchToSend: TelemetryBatch = {
+      events: this.batch.events.slice(),
+      metrics: this.batch.metrics.slice(),
+      errors: this.batch.errors.slice(),
+    };
 
+    try {
       // Remove only the items we're about to send; keep anything added since snapshot.
       const sentEvents = batchToSend.events.length;
       const sentMetrics = batchToSend.metrics.length;
@@ -254,10 +365,18 @@ export class Telyx {
       }
     } catch (error) {
       if (this.config.enableConsole) {
-        console.error('[Telyx] Failed to flush batch:', error);
+        console.error('[Telyx] Failed to flush batch, adding to retry queue:', error);
       }
-      // Don't re-queue failed items - let them be retried on next flush
-      // This prevents infinite retry loops on persistent failures
+      
+      // Add failed batch to retry queue
+      this.retryQueue.push({
+        events: batchToSend.events,
+        metrics: batchToSend.metrics,
+        errors: batchToSend.errors,
+      });
+      
+      // Process retry queue
+      this.processRetryQueue();
     } finally {
       this.flushing = false;
       this._flushPromise = undefined;

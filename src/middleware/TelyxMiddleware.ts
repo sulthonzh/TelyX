@@ -9,22 +9,33 @@ export class TelyxMiddleware {
 
   /**
    * Express-like middleware for HTTP requests
+   * Automatically tracks HTTP requests and responses with timing and metadata
    */
-  public httpRequestMiddleware = (req: { method: string; url: string; get: (header: string) => string; ip?: string }, res: { statusCode: number; send: (body: unknown) => void; [key: string]: unknown }, next: () => void) => {
+  public httpRequestMiddleware = (req: { method: string; url: string; get: (header: string) => string; ip?: string; headers?: Record<string, string> }, res: { statusCode: number; send: (body: unknown) => void; [key: string]: unknown }, next: () => void) => {
     // Prevent double-wrapping if middleware is applied multiple times
     if ((res as Record<string, boolean>)._telyxWrapped) {
       return next();
     }
     (res as Record<string, boolean>)._telyxWrapped = true;
+    
+    // Sanitize headers to prevent sensitive data leakage
+    const sanitizedHeaders = this.sanitizeHeaders(req.headers || {});
 
     const start = Date.now();
 
-    // Track the request
+    // Track the request with sanitized headers
     this.telyx.recordEvent('http_request', {
       method: req.method,
       url: req.url,
       userAgent: req.get('User-Agent'),
       ip: req.ip,
+      // Track only safe headers
+      headers: {
+        referer: sanitizedHeaders.referer,
+        accept: sanitizedHeaders.accept,
+        'accept-language': sanitizedHeaders['accept-language'],
+        'cache-control': sanitizedHeaders['cache-control'],
+      },
     });
 
     // Track response
@@ -149,6 +160,35 @@ export class TelyxMiddleware {
       },
     };
   };
+
+  /**
+   * Sanitize headers to prevent sensitive information leakage
+   */
+  private sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
+    const sensitiveHeaders = [
+      'authorization',
+      'cookie',
+      'set-cookie',
+      'x-api-key',
+      'x-auth-token',
+      'x-secret',
+      'password',
+      'secret',
+    ];
+    
+    const sanitized: Record<string, string> = {};
+    
+    for (const [key, value] of Object.entries(headers)) {
+      const lowerKey = key.toLowerCase();
+      if (sensitiveHeaders.includes(lowerKey)) {
+        sanitized[key] = '[REDACTED]';
+      } else {
+        sanitized[key] = value;
+      }
+    }
+    
+    return sanitized;
+  }
 
   /**
    * Sanitize query for privacy/size reasons

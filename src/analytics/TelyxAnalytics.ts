@@ -186,6 +186,95 @@ export class TelyxAnalytics {
   }
 
   /**
+   * Detect anomalies in response times and error rates
+   */
+  public detectAnomalies(): {
+    highErrorRateMethods: { method: string; errorRate: number; threshold: number }[];
+    slowResponseMethods: { method: string; avgDuration: number; threshold: number }[];
+    suddenTrafficSpikes: { timestamp: string; requestCount: number; threshold: number }[];
+  } {
+    const highErrorRateMethods: { method: string; errorRate: number; threshold: number }[] = [];
+    const slowResponseMethods: { method: string; avgDuration: number; threshold: number }[] = [];
+    const suddenTrafficSpikes: { timestamp: string; requestCount: number; threshold: number }[] = [];
+    
+    // Calculate baseline error rates and response times
+    const methodStats: Record<string, { totalCalls: number; errors: number; totalTime: number }> = {};
+    
+    this.events.forEach(event => {
+      if (!event.method) return;
+      
+      if (!methodStats[event.method]) {
+        methodStats[event.method] = { totalCalls: 0, errors: 0, totalTime: 0 };
+      }
+      
+      methodStats[event.method].totalCalls++;
+      if (event.success === false) {
+        methodStats[event.method].errors++;
+      }
+      if (event.duration) {
+        methodStats[event.method].totalTime += event.duration;
+      }
+    });
+    
+    // Detect high error rate methods (above 5%)
+    Object.entries(methodStats).forEach(([method, stats]) => {
+      const errorRate = stats.errors / stats.totalCalls;
+      if (errorRate > 0.05) {
+        highErrorRateMethods.push({
+          method,
+          errorRate,
+          threshold: 0.05,
+        });
+      }
+      
+      // Detect slow response methods (above 2 seconds average)
+      const avgDuration = stats.totalTime / stats.totalCalls;
+      if (avgDuration > 2000) {
+        slowResponseMethods.push({
+          method,
+          avgDuration,
+          threshold: 2000,
+        });
+      }
+    });
+    
+    // Detect sudden traffic spikes in the last hour
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const recentEvents = this.events.filter(event => 
+      new Date(event.timestamp) > oneHourAgo
+    );
+    
+    // Group by 10-minute buckets
+    const buckets: Record<string, number> = {};
+    recentEvents.forEach(event => {
+      const bucketTime = new Date(event.timestamp);
+      const bucketKey = `${bucketTime.getHours()}:${Math.floor(bucketTime.getMinutes() / 10) * 10}`;
+      buckets[bucketKey] = (buckets[bucketKey] || 0) + 1;
+    });
+    
+    // Find spikes (3x above average)
+    const bucketValues = Object.values(buckets);
+    const avgRequests = bucketValues.reduce((sum, val) => sum + val, 0) / bucketValues.length;
+    
+    Object.entries(buckets).forEach(([timestamp, count]) => {
+      if (count > avgRequests * 3) {
+        suddenTrafficSpikes.push({
+          timestamp,
+          requestCount: count,
+          threshold: avgRequests * 3,
+        });
+      }
+    });
+    
+    return {
+      highErrorRateMethods,
+      slowResponseMethods,
+      suddenTrafficSpikes,
+    };
+  }
+
+  /**
    * Get time-based analytics with fixed indexing
    */
   public getTimeSeriesData(timeRange: '1h' | '24h' | '7d' = '24h'): {
@@ -314,6 +403,7 @@ export class TelyxAnalytics {
    */
   public toMarkdown(): string {
     const summary = this.getSummary();
+    const anomalies = this.detectAnomalies();
     const lines: string[] = [];
 
     lines.push('# Telyx Telemetry Report');
@@ -332,6 +422,48 @@ export class TelyxAnalytics {
       lines.push('|--------|-------|-------------|');
       for (const m of summary.topMethods) {
         lines.push(`| ${m.method} | ${m.calls} | ${m.avgDuration.toFixed(0)}ms |`);
+      }
+    }
+
+    // Anomaly Detection Results
+    if (anomalies.highErrorRateMethods.length > 0 || 
+        anomalies.slowResponseMethods.length > 0 || 
+        anomalies.suddenTrafficSpikes.length > 0) {
+      lines.push('');
+      lines.push('## ⚠️ Anomalies Detected');
+      lines.push('');
+      
+      if (anomalies.highErrorRateMethods.length > 0) {
+        lines.push('### High Error Rate Methods');
+        lines.push('');
+        lines.push('| Method | Error Rate | Threshold |');
+        lines.push('|--------|------------|-----------|');
+        for (const method of anomalies.highErrorRateMethods) {
+          lines.push(`| ${method.method} | ${(method.errorRate * 100).toFixed(1)}% | 5.0% |`);
+        }
+        lines.push('');
+      }
+      
+      if (anomalies.slowResponseMethods.length > 0) {
+        lines.push('### Slow Response Methods');
+        lines.push('');
+        lines.push('| Method | Avg Duration | Threshold |');
+        lines.push('|--------|-------------|-----------|');
+        for (const method of anomalies.slowResponseMethods) {
+          lines.push(`| ${method.method} | ${method.avgDuration.toFixed(0)}ms | 2000ms |`);
+        }
+        lines.push('');
+      }
+      
+      if (anomalies.suddenTrafficSpikes.length > 0) {
+        lines.push('### Sudden Traffic Spikes');
+        lines.push('');
+        lines.push('| Time | Requests | Threshold |');
+        lines.push('|------|----------|-----------|');
+        for (const spike of anomalies.suddenTrafficSpikes) {
+          lines.push(`| ${spike.timestamp} | ${spike.requestCount} | ${spike.threshold.toFixed(0)} |`);
+        }
+        lines.push('');
       }
     }
 
