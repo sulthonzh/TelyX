@@ -192,7 +192,7 @@ export class TelyxAnalytics {
     highErrorRateMethods: { method: string; errorRate: number; threshold: number }[];
     slowResponseMethods: { method: string; avgDuration: number; threshold: number }[];
     suddenTrafficSpikes: { timestamp: string; requestCount: number; threshold: number }[];
-  } {
+    } {
     const highErrorRateMethods: { method: string; errorRate: number; threshold: number }[] = [];
     const slowResponseMethods: { method: string; avgDuration: number; threshold: number }[] = [];
     const suddenTrafficSpikes: { timestamp: string; requestCount: number; threshold: number }[] = [];
