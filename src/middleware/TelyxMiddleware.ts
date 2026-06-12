@@ -25,7 +25,7 @@ export class TelyxMiddleware {
       }
       
       // Sanitize headers to prevent sensitive data leakage
-      const sanitizedHeaders = this.sanitizeHeaders(req.headers || {});
+      const sanitizedHeaders = this.sanitizeHeaders(req.headers ?? {});
 
       const start = Date.now();
 
@@ -106,7 +106,7 @@ export class TelyxMiddleware {
             
             // Validate result object structure
             const rowsAffected = typeof affectedRows === 'number' ? affectedRows : 
-                               typeof rowCount === 'number' ? rowCount : 0;
+              typeof rowCount === 'number' ? rowCount : 0;
             
             this.telyx.recordSuccess('database_query', duration, {
               query: this.sanitizeQuery(query),

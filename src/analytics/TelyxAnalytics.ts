@@ -487,7 +487,7 @@ export class TelyxAnalytics {
       lines.push('## Recent Errors');
       lines.push('');
       for (const err of summary.recentErrors) {
-        lines.push(`- **${err.error}** (${err.context?.method || 'unknown'})`);
+        lines.push(`- **${err.error}** (${err.context?.method ?? 'unknown'})`);
       }
     }
 

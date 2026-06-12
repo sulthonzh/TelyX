@@ -48,7 +48,7 @@ export class Telyx {
     }
     
     this.config = {
-      endpoint: config.endpoint || 'https://api.telyx.example.com',
+      endpoint: config.endpoint ?? 'https://api.telyx.example.com',
       agentName: config.agentName,
       environment: config.environment,
       sampleRate: config.sampleRate ?? 1.0,
@@ -289,7 +289,7 @@ export class Telyx {
   public async flush(): Promise<void> {
     // Use a queue to handle concurrent flush calls properly
     if (!this._flushPromise) {
-      this._flushPromise = this._flushInternal();
+      this._flushPromise ??= this._flushInternal();
     }
     return this._flushPromise;
   }
@@ -378,7 +378,7 @@ export class Telyx {
       });
       
       // Process retry queue
-      this.processRetryQueue();
+      void this.processRetryQueue();
     } finally {
       this.flushing = false;
       this._flushPromise = undefined;
@@ -392,7 +392,7 @@ export class Telyx {
     const totalItems = this.batch.events.length + this.batch.metrics.length + this.batch.errors.length;
     
     if (totalItems >= this.config.maxBatchSize) {
-      this.flush();
+      void this.flush();
     }
   }
 
@@ -401,7 +401,7 @@ export class Telyx {
    */
   private startFlushTimer(): void {
     this.flushTimer = setInterval(() => {
-      this.flush();
+      void this.flush();
     }, this.config.flushInterval);
     // Don't keep the process alive just for the flush timer.
     if (this.flushTimer && typeof this.flushTimer === 'object' && 'unref' in this.flushTimer) {
@@ -462,9 +462,6 @@ export class Telyx {
    * Clean up old analytics data to prevent memory leaks
    */
   private cleanupAnalyticsData(): void {
-    const now = Date.now();
-    const maxAge = this.config.maxHistoryAgeMs;
-    
     // This method should be called by the analytics class
     // For now, we'll add it to the public interface
   }
