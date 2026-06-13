@@ -17,6 +17,7 @@ export class Telyx {
   private shutdownHandler?: () => Promise<void>;
   private retryQueue: TelemetryBatch[] = [];
   private isRetrying = false;
+  private readonly maxRetryQueueSize = 10;
 
   constructor(config: TelyxConfig) {
     // Validate configuration
@@ -370,15 +371,19 @@ export class Telyx {
         console.error('[Telyx] Failed to flush batch, adding to retry queue:', error);
       }
       
-      // Add failed batch to retry queue
-      this.retryQueue.push({
-        events: batchToSend.events,
-        metrics: batchToSend.metrics,
-        errors: batchToSend.errors,
-      });
-      
-      // Process retry queue
-      this.processRetryQueue();
+      // Add failed batch to retry queue (cap to prevent unbounded memory growth)
+      if (this.retryQueue.length < this.maxRetryQueueSize) {
+        this.retryQueue.push({
+          events: batchToSend.events,
+          metrics: batchToSend.metrics,
+          errors: batchToSend.errors,
+        });
+      } else if (this.config.enableConsole) {
+        console.warn('[Telyx] Retry queue full, dropping batch');
+      }
+
+      // Process retry queue (fire-and-forget, errors handled internally)
+      void this.processRetryQueue();
     } finally {
       this.flushing = false;
       this._flushPromise = undefined;
@@ -456,17 +461,6 @@ export class Telyx {
       await this.destroy();
     };
     process.on('beforeExit', this.shutdownHandler);
-  }
-
-  /**
-   * Clean up old analytics data to prevent memory leaks
-   */
-  private cleanupAnalyticsData(): void {
-    const now = Date.now();
-    const maxAge = this.config.maxHistoryAgeMs;
-    
-    // This method should be called by the analytics class
-    // For now, we'll add it to the public interface
   }
 
   /**
