@@ -267,9 +267,13 @@ export class TelyxAnalytics {
     
     // Find spikes (3x above average)
     const bucketValues = Object.values(buckets);
+    if (bucketValues.length === 0) {
+      return { highErrorRateMethods, slowResponseMethods, suddenTrafficSpikes };
+    }
+
     const avgRequests = bucketValues.reduce((sum, val) => sum + val, 0) / bucketValues.length;
-    
-    Object.entries(buckets).forEach(([timestamp, count]) => {
+
+    for (const [timestamp, count] of Object.entries(buckets)) {
       if (count > avgRequests * 3) {
         suddenTrafficSpikes.push({
           timestamp,
@@ -277,7 +281,7 @@ export class TelyxAnalytics {
           threshold: avgRequests * 3,
         });
       }
-    });
+    }
     
     return {
       highErrorRateMethods,
