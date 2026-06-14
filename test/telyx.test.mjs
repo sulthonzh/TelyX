@@ -170,6 +170,20 @@ describe('TelyxAnalytics', () => {
     assert.equal(a.getSystemHealth().totalCalls, 0);
     assert.equal(a.getErrorAnalysis().totalErrors, 0);
   });
+
+  it('getSystemHealth does not count custom events without success as failures', () => {
+    const a = new TelyxAnalytics();
+    // Custom event with no success property — should NOT inflate error rate
+    a.addEvents([
+      makeEvent({ method: 'fetch', duration: 50, success: true }),
+      { timestamp: new Date().toISOString(), agent: 'a', environment: 't', event: 'custom_click', metadata: {} },
+    ]);
+    const health = a.getSystemHealth();
+    // totalCalls counts all events (2), but only 1 has success=true
+    assert.equal(health.totalCalls, 2);
+    assert.equal(health.successRate, 0.5); // 1 out of 2 total
+    assert.equal(health.errorRate, 0); // custom event is NOT a failure
+  });
 });
 
 // ─── TelyxMiddleware ───

@@ -97,8 +97,10 @@ export class TelyxAnalytics {
     methodPerformance: Record<string, unknown>;
     } {
     const totalEvents = this.events.length;
-    const successfulEvents = this.events.filter(event => event.success).length;
-    const failedEvents = this.events.filter(event => !event.success).length;
+    // Only count events that have an explicit success boolean — custom events
+    // (recordEvent) have no success field and must not inflate failure counts.
+    const successfulEvents = this.events.filter(event => event.success === true).length;
+    const failedEvents = this.events.filter(event => event.success === false).length;
 
     // Calculate average response time from all method calls
     const methodEvents = this.events.filter(event => event.duration !== undefined);
@@ -261,7 +263,8 @@ export class TelyxAnalytics {
     const buckets: Record<string, number> = {};
     spikeEvents.forEach(event => {
       const bucketTime = new Date(event.timestamp);
-      const bucketKey = `${bucketTime.getHours()}:${Math.floor(bucketTime.getMinutes() / 10) * 10}`;
+      // Include date in bucket key so multi-day data doesn't collide
+      const bucketKey = `${bucketTime.toISOString().substring(0, 10)} ${bucketTime.getHours()}:${Math.floor(bucketTime.getMinutes() / 10) * 10}`;
       buckets[bucketKey] = (buckets[bucketKey] || 0) + 1;
     });
     
