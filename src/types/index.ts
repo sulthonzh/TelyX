@@ -44,9 +44,3 @@ export interface TelemetryBatch {
   metrics: TelyxMetric[];
   errors: TelyxError[];
 }
-
-export interface AgentWrapper {
-  sendMessage: (input: string) => Promise<string>;
-  generateContent: (prompt: string) => Promise<string>;
-  [key: string]: unknown;
-}
