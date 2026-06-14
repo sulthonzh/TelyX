@@ -59,12 +59,12 @@ export class TelyxMiddleware {
             contentLength: typeof body === 'string' ? body.length : 0,
           });
 
-          originalSend.call(res, body);
+          return originalSend.call(res, body);
         } catch (error) {
           // If telemetry fails, don't break the response
           console.error('[Telyx] Failed to track HTTP response:', error);
           try {
-            originalSend.call(res, body);
+            return originalSend.call(res, body);
           } catch (sendError) {
             console.error('[Telyx] Failed to send response after telemetry error:', sendError);
           }
