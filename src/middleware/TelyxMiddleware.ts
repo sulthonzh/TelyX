@@ -19,23 +19,19 @@ export class TelyxMiddleware {
       }
       (res as Record<string, boolean>)._telyxWrapped = true;
       
-      // Validate request object
       if (!req || typeof req.method !== 'string' || typeof req.url !== 'string') {
         throw new Error('Invalid request object');
       }
       
-      // Sanitize headers to prevent sensitive data leakage
       const sanitizedHeaders = this.sanitizeHeaders(req.headers || {});
 
       const start = Date.now();
 
-      // Track the request with sanitized headers
       this.telyx.recordEvent('http_request', {
         method: req.method,
         url: req.url,
         userAgent: req.get('User-Agent'),
         ip: req.ip,
-        // Track only safe headers
         headers: {
           referer: sanitizedHeaders.referer,
           accept: sanitizedHeaders.accept,
@@ -44,7 +40,6 @@ export class TelyxMiddleware {
         },
       });
 
-      // Track response with error handling
       const originalSend = res.send;
       res.send = (body: unknown) => {
         try {
@@ -84,7 +79,6 @@ export class TelyxMiddleware {
   public databaseQueryMiddleware = (query: string) => {
     const start = Date.now();
     
-    // Validate query input
     if (typeof query !== 'string' || query.trim() === '') {
       throw new Error('Database query must be a non-empty string');
     }
@@ -104,13 +98,12 @@ export class TelyxMiddleware {
             const affectedRows = resultObj?.affectedRows as number | undefined;
             const rowCount = resultObj?.rowCount as number | undefined;
             
-            // Validate result object structure
             const rowsAffected = typeof affectedRows === 'number' ? affectedRows : 
                                typeof rowCount === 'number' ? rowCount : 0;
             
             this.telyx.recordSuccess('database_query', duration, {
               query: this.sanitizeQuery(query),
-              rowsAffected: Math.max(0, rowsAffected), // Ensure non-negative
+              rowsAffected: Math.max(0, rowsAffected),
             });
           }
         } catch (error) {
@@ -152,7 +145,6 @@ export class TelyxMiddleware {
    */
   public aiCallMiddleware = (provider: string, model: string, prompt: string) => {
     try {
-      // Validate inputs
       if (typeof provider !== 'string' || provider.trim() === '') {
         throw new Error('Provider must be a non-empty string');
       }
@@ -168,7 +160,7 @@ export class TelyxMiddleware {
       this.telyx.recordEvent('ai_api_call', {
         provider,
         model,
-        promptLength: Math.max(0, prompt.length), // Ensure non-negative
+        promptLength: prompt.length,
       });
 
       return {
@@ -187,13 +179,12 @@ export class TelyxMiddleware {
               const usage = responseObj?.usage as Record<string, unknown> | undefined;
               const content = responseObj?.content as string | null | undefined;
               
-              // Safely extract tokens with validation
               let tokensUsed = 0;
               if (usage && typeof usage === 'object' && 'total_tokens' in usage && typeof usage.total_tokens === 'number') {
                 tokensUsed = Math.max(0, usage.total_tokens);
               }
               
-              const responseLength = content ? Math.max(0, content.length) : 0;
+              const responseLength = content ? content.length : 0;
               
               this.telyx.recordSuccess('ai_api_call', duration, {
                 provider,
@@ -202,7 +193,6 @@ export class TelyxMiddleware {
                 responseLength,
               });
               
-              // Track token usage as a metric with validation
               if (tokensUsed > 0) {
                 this.telyx.recordMetric('tokens_used', tokensUsed, {
                   provider,
@@ -220,7 +210,6 @@ export class TelyxMiddleware {
       // Return a no-op middleware to prevent breaking the application
       return {
         end: () => {
-          // Do nothing if initialization failed
         }
       };
     }

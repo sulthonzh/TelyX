@@ -3,7 +3,6 @@ import http from 'http';
 import https from 'https';
 import { TelyxConfig, TelyxEvent, TelyxMetric, TelyxError, TelemetryBatch } from '../types';
 
-// Re-export types for convenience
 export type { TelyxConfig, TelyxEvent, TelyxMetric, TelyxError, TelemetryBatch };
 
 export class Telyx {
@@ -13,14 +12,12 @@ export class Telyx {
   private flushTimer?: NodeJS.Timeout;
   private flushing = false;
   private _flushPromise?: Promise<void>;
-  private agentWrapper?: unknown;
   private shutdownHandler?: () => Promise<void>;
   private retryQueue: TelemetryBatch[] = [];
   private isRetrying = false;
   private readonly maxRetryQueueSize = 10;
 
   constructor(config: TelyxConfig) {
-    // Validate configuration
     if (typeof config.agentName !== 'string' || config.agentName.trim() === '') {
       throw new Error('agentName is required and must be a non-empty string');
     }
@@ -67,9 +64,7 @@ export class Telyx {
         'Content-Type': 'application/json',
         'User-Agent': `telyx/${this.config.agentName}`,
       },
-      // Validate response to prevent silent failures
       validateStatus: (status: number) => status >= 200 && status < 300,
-      // Add error handling for network failures
       httpAgent: new http.Agent({ keepAlive: true }),
       httpsAgent: new https.Agent({ keepAlive: true }),
     });
@@ -92,7 +87,6 @@ export class Telyx {
       const shouldSample = Math.random() < this.config.sampleRate;
 
       if (!shouldSample) {
-        // Create a next function that resolves with the input
         const next = () => Promise.resolve(input as T);
         return fn(input, next);
       }
@@ -100,9 +94,9 @@ export class Telyx {
       const start = Date.now();
 
       try {
-        // Create a next function that resolves with the input (consistent with non-sampled path)
-        // Note: result is not yet available when next() is called synchronously inside fn,
-        // so we pass input through, matching the non-sampled behavior.
+        // next() resolves with the input because the result is not yet available
+        // when next() is called synchronously inside fn; this matches the
+        // non-sampled behavior.
         const next = () => Promise.resolve(input as T);
         const result = await fn(input, next);
         this.recordSuccess(methodName, Date.now() - start, { input: this.sanitizeInput(input) });
@@ -118,7 +112,6 @@ export class Telyx {
    * Record a custom event
    */
   public recordEvent(eventName: string, metadata?: Record<string, unknown>): void {
-    // Input validation
     if (typeof eventName !== 'string' || eventName.trim() === '') {
       throw new Error('eventName must be a non-empty string');
     }
@@ -151,7 +144,6 @@ export class Telyx {
    * Record a metric
    */
   public recordMetric(metricName: string, value: number, metadata?: Record<string, unknown>): void {
-    // Input validation
     if (typeof metricName !== 'string' || metricName.trim() === '') {
       throw new Error('metricName must be a non-empty string');
     }
@@ -189,7 +181,6 @@ export class Telyx {
    * Record a success event
    */
   public recordSuccess(methodName: string, duration: number, metadata?: Record<string, unknown>): void {
-    // Input validation
     if (typeof methodName !== 'string' || methodName.trim() === '') {
       throw new Error('methodName must be a non-empty string');
     }
@@ -225,7 +216,6 @@ export class Telyx {
    * Record an error
    */
   public recordError(methodName: string, error: unknown, metadata?: Record<string, unknown>): void {
-    // Input validation
     if (typeof methodName !== 'string' || methodName.trim() === '') {
       throw new Error('methodName must be a non-empty string');
     }
@@ -258,8 +248,6 @@ export class Telyx {
    * Wrap an agent with telemetry
    */
   public track(agent: unknown): unknown {
-    this.agentWrapper = agent;
-    
     return new Proxy(agent as Record<string, unknown>, {
       get: (target, prop) => {
         if (typeof prop === 'symbol') {
@@ -268,15 +256,12 @@ export class Telyx {
         }
         
         if (typeof target[prop] === 'function') {
-          // Create a wrapper that preserves the original function signature
           const originalMethod = target[prop] as (input: unknown) => unknown;
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const trackedMethod = this.trackMethod(String(prop), async (input: unknown, next: () => Promise<unknown>) => {
-            // Call the original method with the input
             return originalMethod.call(target, input);
           });
           
-          // Return the tracked method
           return trackedMethod;
         }
         return target[prop as string];
@@ -288,7 +273,6 @@ export class Telyx {
    * Flush the current batch to the server
    */
   public async flush(): Promise<void> {
-    // Use a queue to handle concurrent flush calls properly
     if (!this._flushPromise) {
       this._flushPromise = this._flushInternal();
     }
@@ -309,14 +293,12 @@ export class Telyx {
       const batch = this.retryQueue[0];
       await this.httpClient.post('/telemetry', batch);
       
-      // Remove successfully retried batch
       this.retryQueue.shift();
       
       if (this.config.enableConsole) {
         console.log(`[Telyx] Successfully retried batch with ${batch.events.length} events, ${batch.metrics.length} metrics, ${batch.errors.length} errors`);
       }
       
-      // Continue processing remaining retries
       await this.processRetryQueue();
     } catch (error) {
       if (this.config.enableConsole) {
@@ -371,7 +353,6 @@ export class Telyx {
         console.error('[Telyx] Failed to flush batch, adding to retry queue:', error);
       }
       
-      // Add failed batch to retry queue (cap to prevent unbounded memory growth)
       if (this.retryQueue.length < this.maxRetryQueueSize) {
         this.retryQueue.push({
           events: batchToSend.events,
@@ -382,9 +363,8 @@ export class Telyx {
         console.warn('[Telyx] Retry queue full, dropping batch');
       }
 
-      // Process retry queue (fire-and-forget, errors handled internally)
-      void this.processRetryQueue();
-    } finally {
+      // Fire-and-forget; errors handled internally
+      void this.processRetryQueue();    } finally {
       this.flushing = false;
       this._flushPromise = undefined;
     }
@@ -418,12 +398,10 @@ export class Telyx {
    * Stop the flush timer and clean up
    */
   public async destroy(): Promise<void> {
-    // Cancel any pending flush operation
     if (this._flushPromise) {
       try {
         await this._flushPromise;
       } catch (error) {
-        // Ignore flush errors during cleanup
         if (this.config.enableConsole) {
           console.warn('[Telyx] Flush error during destroy:', error);
         }
@@ -444,7 +422,6 @@ export class Telyx {
     try {
       await this.flush();
     } catch (error) {
-      // Ignore flush errors during cleanup
       if (this.config.enableConsole) {
         console.warn('[Telyx] Final flush failed:', error);
       }
@@ -467,22 +444,18 @@ export class Telyx {
    * Sanitize input for privacy/size reasons
    */
   private sanitizeInput(input: unknown): unknown {
-    // Handle null/undefined
     if (input === null || input === undefined) {
       return String(input);
     }
     
-    // Handle strings
     if (typeof input === 'string') {
       return input.substring(0, 100) + (input.length > 100 ? '...' : '');
     }
     
-    // Handle objects (including arrays)
     if (typeof input === 'object') {
       return '[object]';
     }
     
-    // Handle numbers, booleans, etc.
     return input;
   }
 }
