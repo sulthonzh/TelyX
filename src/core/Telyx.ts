@@ -102,6 +102,11 @@ export class Telyx {
         this.recordSuccess(methodName, Date.now() - start, { input: this.sanitizeInput(input) });
         return result;
       } catch (err) {
+        const duration = Date.now() - start;
+        // Record a failure event so analytics (error rate, failed calls, anomaly
+        // detection) work correctly. recordError() alone only pushes to the
+        // errors array — it does not create a trackable event.
+        this.recordFailure(methodName, duration, { input: this.sanitizeInput(input) });
         this.recordError(methodName, err, { input: this.sanitizeInput(input) });
         throw err;
       }
@@ -209,6 +214,42 @@ export class Telyx {
     
     if (this.config.enableConsole) {
       console.log('[Telyx] Success:', event);
+    }
+  }
+
+  /**
+   * Record a method failure — creates a trackable event with success=false
+   * so that analytics (error rate, failed calls, anomaly detection) work.
+   */
+  public recordFailure(methodName: string, duration: number, metadata?: Record<string, unknown>): void {
+    if (typeof methodName !== 'string' || methodName.trim() === '') {
+      throw new Error('methodName must be a non-empty string');
+    }
+
+    if (typeof duration !== 'number' || duration < 0) {
+      throw new Error('duration must be a non-negative number');
+    }
+
+    if (metadata && typeof metadata !== 'object') {
+      throw new Error('metadata must be an object if provided');
+    }
+
+    const event: TelyxEvent = {
+      timestamp: new Date().toISOString(),
+      agent: this.config.agentName,
+      environment: this.config.environment,
+      event: 'method_failure',
+      method: methodName,
+      duration,
+      success: false,
+      metadata,
+    };
+
+    this.batch.events.push(event);
+    this.checkBatchSize();
+
+    if (this.config.enableConsole) {
+      console.log('[Telyx] Failure:', event);
     }
   }
 

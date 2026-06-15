@@ -109,6 +109,25 @@ describe('Telyx', () => {
 
       await expect(trackedMethod('test input')).rejects.toThrow('Test error');
     });
+
+    it('should create a failure event with success=false on error', async () => {
+      const trackedMethod = telyx.trackMethod('failing_method', async (_input, _next) => {
+        throw new Error('Boom');
+      });
+
+      await expect(trackedMethod('input')).rejects.toThrow('Boom');
+
+      const batch = getBatch(telyx);
+      // Should have a failure event with success=false
+      const failureEvent = batch.events.find(e => e.success === false);
+      expect(failureEvent).toBeDefined();
+      expect(failureEvent!.method).toBe('failing_method');
+      expect(failureEvent!.success).toBe(false);
+      expect(failureEvent!.duration).toBeGreaterThanOrEqual(0);
+      // Should also have the error in the errors array
+      expect(batch.errors).toHaveLength(1);
+      expect(batch.errors[0].error).toBe('Boom');
+    });
   });
 
   describe('Sampling', () => {
