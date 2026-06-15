@@ -16,9 +16,7 @@ export class TelyxAnalytics {
    * Add events from telemetry batch
    */
   public addEvents(events: TelyxEvent[]): void {
-    for (const event of events) {
-      this.events.push(event);
-    }
+    this.events.push(...events);
     this.cleanupData();
   }
 
@@ -26,9 +24,7 @@ export class TelyxAnalytics {
    * Add metrics from telemetry batch
    */
   public addMetrics(metrics: TelyxMetric[]): void {
-    for (const metric of metrics) {
-      this.metrics.push(metric);
-    }
+    this.metrics.push(...metrics);
     this.cleanupData();
   }
 
@@ -36,9 +32,7 @@ export class TelyxAnalytics {
    * Add errors from telemetry batch
    */
   public addErrors(errors: TelyxError[]): void {
-    for (const error of errors) {
-      this.errors.push(error);
-    }
+    this.errors.push(...errors);
     this.cleanupData();
   }
 
