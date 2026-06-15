@@ -41,22 +41,25 @@ export class TelyxMiddleware {
       });
 
       const originalSend = res.send;
+      
+      const trackResponse = (body: unknown) => {
+        const duration = Date.now() - start;
+        const statusCode = res.statusCode;
+        
+        this.telyx.recordEvent('http_response', {
+          method: req.method,
+          url: req.url,
+          statusCode,
+          duration,
+          contentLength: typeof body === 'string' ? body.length : 0,
+        });
+      };
+      
       res.send = (body: unknown) => {
         try {
-          const duration = Date.now() - start;
-          const statusCode = res.statusCode;
-          
-          this.telyx.recordEvent('http_response', {
-            method: req.method,
-            url: req.url,
-            statusCode,
-            duration,
-            contentLength: typeof body === 'string' ? body.length : 0,
-          });
-
+          trackResponse(body);
           return originalSend.call(res, body);
         } catch (error) {
-          // If telemetry fails, don't break the response
           console.error('[Telyx] Failed to track HTTP response:', error);
           try {
             return originalSend.call(res, body);
@@ -65,6 +68,21 @@ export class TelyxMiddleware {
           }
         }
       };
+      
+      // Also wrap res.end() — Express apps using res.end() (streams, proxies)
+      // would bypass tracking since res.end() doesn't call res.send()
+      const resWithEnd = res as unknown as { end?: (...args: unknown[]) => unknown };
+      if (typeof resWithEnd.end === 'function') {
+        const originalEnd = resWithEnd.end;
+        resWithEnd.end = function (...args: unknown[]) {
+          try {
+            trackResponse(args[0]);
+          } catch {
+            // telemetry must never break the response
+          }
+          return originalEnd.apply(res, args as unknown[]);
+        };
+      }
 
       next();
     } catch (error) {
@@ -133,7 +151,7 @@ export class TelyxMiddleware {
           this.telyx.recordSuccess('cache_operation', duration, {
             operation,
             key,
-            hit: result !== undefined,
+            hit: result != null,
           });
         }
       },
@@ -279,8 +297,9 @@ export class TelyxMiddleware {
     let sanitized = query;
     
     sensitiveWords.forEach(word => {
-      const regex = new RegExp(`\\b${word}\\s*[:=]\\s*['"][^'"]*['"]`, 'gi');
-      sanitized = sanitized.replace(regex, `${word}=****`);
+      // Redact both quoted (password='secret') and unquoted (password=secret) values
+      const regex = new RegExp(`(\\b${word}\\s*[:=]\\s*)(?:'[^']*'|"[^"]*"|[^\\s,;)]+)`, 'gi');
+      sanitized = sanitized.replace(regex, `$1****`);
     });
     
     return sanitized.substring(0, 200) + (sanitized.length > 200 ? '...' : '');

@@ -252,6 +252,27 @@ describe('TelyxMiddleware', () => {
     assert.ok(result.includes('****'));
     t.destroy();
   });
+
+  it('sanitizeQuery redacts unquoted sensitive values', () => {
+    const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });
+    const mw = new TelyxMiddleware(t);
+    const result = mw['sanitizeQuery']("WHERE password=secret123 AND key=abc456 AND user_id=42");
+    assert.ok(!result.includes('secret123'));
+    assert.ok(!result.includes('abc456'));
+    assert.ok(result.includes('****'));
+    // Non-sensitive values should be preserved
+    assert.ok(result.includes('42'));
+    t.destroy();
+  });
+
+  it('cacheOperationMiddleware null result is a cache miss', () => {
+    const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });
+    const mw = new TelyxMiddleware(t);
+    // null should be a cache miss, not a hit
+    const tracker = mw.cacheOperationMiddleware('get', 'user:missing');
+    tracker.end(null);
+    t.destroy();
+  });
 });
 
 // ─── TelyxAnalytics: Time Series ───
