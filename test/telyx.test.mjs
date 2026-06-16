@@ -173,16 +173,17 @@ describe('TelyxAnalytics', () => {
 
   it('getSystemHealth does not count custom events without success as failures', () => {
     const a = new TelyxAnalytics();
-    // Custom event with no success property — should NOT inflate error rate
+    // Custom event with no success property — should NOT dilute success/error rates
     a.addEvents([
       makeEvent({ method: 'fetch', duration: 50, success: true }),
       { timestamp: new Date().toISOString(), agent: 'a', environment: 't', event: 'custom_click', metadata: {} },
     ]);
     const health = a.getSystemHealth();
-    // totalCalls counts all events (2), but only 1 has success=true
+    // totalCalls counts all events (2)
     assert.equal(health.totalCalls, 2);
-    assert.equal(health.successRate, 0.5); // 1 out of 2 total
-    assert.equal(health.errorRate, 0); // custom event is NOT a failure
+    // successRate is 100% because the only method call succeeded — custom event excluded
+    assert.equal(health.successRate, 1.0);
+    assert.equal(health.errorRate, 0);
   });
 });
 
@@ -331,14 +332,16 @@ describe('TelyxAnalytics getSummary & toMarkdown', () => {
       { timestamp: new Date().toISOString(), agent: 'a', environment: 't', event: 'call', method: 'fetch', duration: 100, success: true },
       { timestamp: new Date().toISOString(), agent: 'a', environment: 't', event: 'call', method: 'fetch', duration: 200, success: true },
       { timestamp: new Date().toISOString(), agent: 'a', environment: 't', event: 'call', method: 'save', duration: 300, success: false },
+      { timestamp: new Date().toISOString(), agent: 'a', environment: 't', event: 'custom_click', metadata: {} },
     ]);
     a.addMetrics([{ timestamp: new Date().toISOString(), agent: 'a', environment: 't', metric: 'cpu', value: 42 }]);
     a.addErrors([{ timestamp: new Date().toISOString(), agent: 'a', environment: 't', error: 'TimeoutError', context: { method: 'save' } }]);
 
     const s = a.getSummary();
-    assert.equal(s.totalEvents, 3);
+    assert.equal(s.totalEvents, 4); // includes custom event
     assert.equal(s.totalMetrics, 1);
     assert.equal(s.totalErrors, 1);
+    // successRate excludes custom event from denominator: 2 success / 3 method calls
     assert.equal(s.successRate, 2 / 3);
     assert.equal(s.errorRate, 1 / 3);
     assert.equal(s.avgResponseTime, 200); // (100+200+300)/3

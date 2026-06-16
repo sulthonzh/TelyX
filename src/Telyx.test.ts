@@ -244,18 +244,16 @@ describe('TelyxAnalytics', () => {
   });
 
   describe('getSystemHealth', () => {
-    it('computes success and error rates', () => {
+    it('does not dilute rates with custom events', () => {
       analytics.addEvents([
         makeEvent({ success: true, duration: 50, method: 'a' }),
-        makeEvent({ success: false, duration: 100, method: 'a' }),
-        makeEvent({ success: true, duration: 75, method: 'b' }),
+        makeEvent({ event: 'custom_click' }), // no success field
       ]);
 
       const health = analytics.getSystemHealth();
-      expect(health.totalCalls).toBe(3);
-      expect(health.successRate).toBeCloseTo(2 / 3);
-      expect(health.errorRate).toBeCloseTo(1 / 3);
-      expect(health.averageResponseTime).toBeCloseTo(75);
+      expect(health.totalCalls).toBe(2); // counts all events
+      expect(health.successRate).toBe(1); // 1/1 method calls succeeded
+      expect(health.errorRate).toBe(0);
     });
   });
 

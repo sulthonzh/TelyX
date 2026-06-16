@@ -92,9 +92,10 @@ export class TelyxAnalytics {
     } {
     const totalEvents = this.events.length;
     // Only count events that have an explicit success boolean — custom events
-    // (recordEvent) have no success field and must not inflate failure counts.
+    // (recordEvent) have no success field and must not dilute success/error rates.
     const successfulEvents = this.events.filter(event => event.success === true).length;
     const failedEvents = this.events.filter(event => event.success === false).length;
+    const methodCallCount = successfulEvents + failedEvents;
 
     // Calculate average response time from all method calls
     const methodEvents = this.events.filter(event => event.duration !== undefined);
@@ -113,8 +114,8 @@ export class TelyxAnalytics {
     return {
       uptime: this.calculateUptime(),
       totalCalls: totalEvents,
-      successRate: totalEvents > 0 ? successfulEvents / totalEvents : 0,
-      errorRate: totalEvents > 0 ? failedEvents / totalEvents : 0,
+      successRate: methodCallCount > 0 ? successfulEvents / methodCallCount : 0,
+      errorRate: methodCallCount > 0 ? failedEvents / methodCallCount : 0,
       averageResponseTime,
       methodPerformance,
     };
@@ -368,6 +369,7 @@ export class TelyxAnalytics {
     const totalEvents = this.events.length;
     const successful = this.events.filter(e => e.success === true).length;
     const failed = this.events.filter(e => e.success === false).length;
+    const methodCallCount = successful + failed;
     const withDuration = this.events.filter(e => e.duration !== undefined);
 
     const avgResponseTime = withDuration.length > 0
@@ -390,8 +392,8 @@ export class TelyxAnalytics {
       totalEvents,
       totalErrors: this.errors.length,
       totalMetrics: this.metrics.length,
-      successRate: totalEvents > 0 ? successful / totalEvents : 1,
-      errorRate: totalEvents > 0 ? failed / totalEvents : 0,
+      successRate: methodCallCount > 0 ? successful / methodCallCount : 1,
+      errorRate: methodCallCount > 0 ? failed / methodCallCount : 0,
       avgResponseTime,
       topMethods,
       recentErrors: this.errors.slice(-5),
