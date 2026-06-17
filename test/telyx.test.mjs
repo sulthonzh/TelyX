@@ -173,16 +173,34 @@ describe('TelyxAnalytics', () => {
 
   it('getSystemHealth does not count custom events without success as failures', () => {
     const a = new TelyxAnalytics();
-    // Custom event with no success property — should NOT inflate error rate
+    // Custom event with no success property — should NOT dilute success/error rates
     a.addEvents([
       makeEvent({ method: 'fetch', duration: 50, success: true }),
       { timestamp: new Date().toISOString(), agent: 'a', environment: 't', event: 'custom_click', metadata: {} },
     ]);
     const health = a.getSystemHealth();
-    // totalCalls counts all events (2), but only 1 has success=true
+    // totalCalls counts all events (2), but only 1 has explicit success field
     assert.equal(health.totalCalls, 2);
-    assert.equal(health.successRate, 0.5); // 1 out of 2 total
+    assert.equal(health.successRate, 1.0); // 1 success out of 1 rated event
     assert.equal(health.errorRate, 0); // custom event is NOT a failure
+  });
+
+  it('getSystemHealth excludes custom events from success/error rates', () => {
+    const a = new TelyxAnalytics();
+    // Mix of custom events and success/failure events
+    a.addEvents([
+      makeEvent({ method: 'fetch', duration: 50, success: true }),
+      makeEvent({ method: 'save', duration: 100, success: false }),
+      { timestamp: new Date().toISOString(), agent: 'a', environment: 't', event: 'custom_click', metadata: {} },
+      { timestamp: new Date().toISOString(), agent: 'a', environment: 't', event: 'custom_page_view', metadata: {} },
+    ]);
+    const health = a.getSystemHealth();
+    // totalCalls = 4 (all events)
+    // successRate = 1/1 = 1.0 (1 success, 0 failures in rated events)
+    // errorRate = 0/1 = 0 (1 success, 0 failures in rated events)
+    assert.equal(health.totalCalls, 4);
+    assert.equal(health.successRate, 0.5); // 1 success out of 2 rated events
+    assert.equal(health.errorRate, 0.5); // 1 failure out of 2 rated events
   });
 });
 
