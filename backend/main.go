@@ -24,6 +24,13 @@ import (
 const osURL = "http://opensearch:9200/logs/_doc"
 const osSearchURL = "http://opensearch:9200/logs/_search"
 
+// httpTimeout is the timeout for outbound HTTP calls to OpenSearch.
+const httpTimeout = 10 * time.Second
+
+// maxSearchResponseBytes limits the response body read from OpenSearch search
+// queries to prevent excessive memory allocation (default 10MB).
+const maxSearchResponseBytes = 10 << 20
+
 // Prometheus metrics
 var (
 	requestCount = prometheus.NewCounterVec(
@@ -107,7 +114,8 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send log data to OpenSearch
-	res, err := http.Post(osURL, "application/json", bytes.NewBuffer(jsonData))
+	client := &http.Client{Timeout: httpTimeout}
+	res, err := client.Post(osURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil || res.StatusCode >= 400 {
 		http.Error(w, `{"error": "Failed to send log to OpenSearch"}`, http.StatusInternalServerError)
 		span.RecordError(err)
@@ -167,15 +175,31 @@ func logsSearchHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	queryJSON, _ := json.Marshal(query)
-	res, err := http.Post(osSearchURL, "application/json", bytes.NewBuffer(queryJSON))
+	queryJSON, err := json.Marshal(query)
+	if err != nil {
+		http.Error(w, `{"error": "Internal server error"}`, http.StatusInternalServerError)
+		span.RecordError(err)
+		return
+	}
+	searchClient := &http.Client{Timeout: httpTimeout}
+	res, err := searchClient.Post(osSearchURL, "application/json", bytes.NewBuffer(queryJSON))
 	if err != nil || res.StatusCode >= 400 {
 		http.Error(w, `{"error": "Failed to query OpenSearch"}`, http.StatusInternalServerError)
 		return
 	}
 	defer res.Body.Close()
 
-	body, _ := io.ReadAll(res.Body)
+	limitedReader := io.LimitReader(res.Body, maxSearchResponseBytes+1)
+	body, err := io.ReadAll(limitedReader)
+	if err != nil {
+		http.Error(w, `{"error": "Failed to read search results"}`, http.StatusInternalServerError)
+		span.RecordError(err)
+		return
+	}
+	if int64(len(body)) > maxSearchResponseBytes {
+		http.Error(w, `{"error": "Search response too large"}`, http.StatusInsufficientStorage)
+		return
+	}
 
 	// Parse and flatten hits
 	var searchRes struct {
