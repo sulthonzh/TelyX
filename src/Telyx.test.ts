@@ -257,6 +257,20 @@ describe('TelyxAnalytics', () => {
       expect(health.errorRate).toBeCloseTo(1 / 3);
       expect(health.averageResponseTime).toBeCloseTo(75);
     });
+
+    it('custom events do not dilute success rate', () => {
+      analytics.addEvents([
+        makeEvent({ success: true, duration: 50, method: 'api' }),
+        makeEvent({ success: false, duration: 100, method: 'api' }),
+        makeEvent({ event: 'custom_event' }), // custom event, no success field
+        makeEvent({ event: 'user_action' }), // another custom event
+      ]);
+
+      const health = analytics.getSystemHealth();
+      expect(health.totalCalls).toBe(4); // all events
+      expect(health.successRate).toBeCloseTo(0.5); // 1 success / 2 outcomes (excluding custom events)
+      expect(health.errorRate).toBeCloseTo(0.5); // 1 failure / 2 outcomes
+    });
   });
 
   describe('getErrorAnalysis', () => {

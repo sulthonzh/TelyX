@@ -95,6 +95,8 @@ export class TelyxAnalytics {
     // (recordEvent) have no success field and must not inflate failure counts.
     const successfulEvents = this.events.filter(event => event.success === true).length;
     const failedEvents = this.events.filter(event => event.success === false).length;
+    // Success rate denominator should only include events with success/failure outcome
+    const outcomeEvents = successfulEvents + failedEvents;
 
     // Calculate average response time from all method calls
     const methodEvents = this.events.filter(event => event.duration !== undefined);
@@ -113,8 +115,8 @@ export class TelyxAnalytics {
     return {
       uptime: this.calculateUptime(),
       totalCalls: totalEvents,
-      successRate: totalEvents > 0 ? successfulEvents / totalEvents : 0,
-      errorRate: totalEvents > 0 ? failedEvents / totalEvents : 0,
+      successRate: outcomeEvents > 0 ? successfulEvents / outcomeEvents : 1,
+      errorRate: outcomeEvents > 0 ? failedEvents / outcomeEvents : 0,
       averageResponseTime,
       methodPerformance,
     };
@@ -368,6 +370,7 @@ export class TelyxAnalytics {
     const totalEvents = this.events.length;
     const successful = this.events.filter(e => e.success === true).length;
     const failed = this.events.filter(e => e.success === false).length;
+    const outcomeEvents = successful + failed;
     const withDuration = this.events.filter(e => e.duration !== undefined);
 
     const avgResponseTime = withDuration.length > 0
@@ -390,8 +393,8 @@ export class TelyxAnalytics {
       totalEvents,
       totalErrors: this.errors.length,
       totalMetrics: this.metrics.length,
-      successRate: totalEvents > 0 ? successful / totalEvents : 1,
-      errorRate: totalEvents > 0 ? failed / totalEvents : 0,
+      successRate: outcomeEvents > 0 ? successful / outcomeEvents : 1,
+      errorRate: outcomeEvents > 0 ? failed / outcomeEvents : 0,
       avgResponseTime,
       topMethods,
       recentErrors: this.errors.slice(-5),

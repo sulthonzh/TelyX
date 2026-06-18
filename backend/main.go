@@ -69,8 +69,12 @@ func initTracer() (*trace.TracerProvider, error) {
 	return tp, nil
 }
 
-// logHandler processes log data and sends it to OpenSearch
+// logHandler processes log data and sends it to OpenSearch (POST only)
 func logHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error": "Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start).Seconds()
@@ -83,6 +87,8 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	defer r.Body.Close()
 
+	// Limit request body size to prevent DoS attacks (max 1MB)
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	var logData map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&logData); err != nil {
 		http.Error(w, `{"error": "Invalid log format"}`, http.StatusBadRequest)
@@ -108,13 +114,18 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Send log data to OpenSearch
 	res, err := http.Post(osURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil || res.StatusCode >= 400 {
+	if err != nil {
 		http.Error(w, `{"error": "Failed to send log to OpenSearch"}`, http.StatusInternalServerError)
 		span.RecordError(err)
 		span.SetAttributes(semconv.ExceptionMessageKey.String("Failed to send log to OpenSearch"))
 		return
 	}
 	defer res.Body.Close()
+	if res.StatusCode >= 400 {
+		http.Error(w, `{"error": "Failed to send log to OpenSearch"}`, http.StatusInternalServerError)
+		span.SetAttributes(semconv.ExceptionMessageKey.String("OpenSearch returned non-2xx status"))
+		return
+	}
 
 	// Respond to the client
 	w.WriteHeader(http.StatusCreated)
@@ -136,8 +147,12 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// logsSearchHandler queries logs from OpenSearch
+// logsSearchHandler queries logs from OpenSearch (GET only)
 func logsSearchHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error": "Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
 	_, span := otel.Tracer("telyx-backend").Start(r.Context(), "logsSearchHandler")
 	defer span.End()
 
@@ -169,11 +184,15 @@ func logsSearchHandler(w http.ResponseWriter, r *http.Request) {
 
 	queryJSON, _ := json.Marshal(query)
 	res, err := http.Post(osSearchURL, "application/json", bytes.NewBuffer(queryJSON))
-	if err != nil || res.StatusCode >= 400 {
+	if err != nil {
 		http.Error(w, `{"error": "Failed to query OpenSearch"}`, http.StatusInternalServerError)
 		return
 	}
 	defer res.Body.Close()
+	if res.StatusCode >= 400 {
+		http.Error(w, `{"error": "Failed to query OpenSearch"}`, http.StatusInternalServerError)
+		return
+	}
 
 	body, _ := io.ReadAll(res.Body)
 
