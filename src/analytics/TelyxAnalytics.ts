@@ -16,7 +16,10 @@ export class TelyxAnalytics {
    * Add events from telemetry batch
    */
   public addEvents(events: TelyxEvent[]): void {
-    this.events.push(...events);
+    // Use a loop instead of push(...events) to avoid RangeError on large arrays
+    for (let i = 0; i < events.length; i++) {
+      this.events.push(events[i]);
+    }
     this.cleanupData();
   }
 
@@ -24,7 +27,9 @@ export class TelyxAnalytics {
    * Add metrics from telemetry batch
    */
   public addMetrics(metrics: TelyxMetric[]): void {
-    this.metrics.push(...metrics);
+    for (let i = 0; i < metrics.length; i++) {
+      this.metrics.push(metrics[i]);
+    }
     this.cleanupData();
   }
 
@@ -32,7 +37,9 @@ export class TelyxAnalytics {
    * Add errors from telemetry batch
    */
   public addErrors(errors: TelyxError[]): void {
-    this.errors.push(...errors);
+    for (let i = 0; i < errors.length; i++) {
+      this.errors.push(errors[i]);
+    }
     this.cleanupData();
   }
 
@@ -95,6 +102,8 @@ export class TelyxAnalytics {
     // (recordEvent) have no success field and must not inflate failure counts.
     const successfulEvents = this.events.filter(event => event.success === true).length;
     const failedEvents = this.events.filter(event => event.success === false).length;
+    // Rates should be based only on events that have a success/failure outcome.
+    const ratedEvents = successfulEvents + failedEvents;
 
     // Calculate average response time from all method calls
     const methodEvents = this.events.filter(event => event.duration !== undefined);
@@ -113,8 +122,8 @@ export class TelyxAnalytics {
     return {
       uptime: this.calculateUptime(),
       totalCalls: totalEvents,
-      successRate: totalEvents > 0 ? successfulEvents / totalEvents : 0,
-      errorRate: totalEvents > 0 ? failedEvents / totalEvents : 0,
+      successRate: ratedEvents > 0 ? successfulEvents / ratedEvents : 0,
+      errorRate: ratedEvents > 0 ? failedEvents / ratedEvents : 0,
       averageResponseTime,
       methodPerformance,
     };
@@ -368,6 +377,7 @@ export class TelyxAnalytics {
     const totalEvents = this.events.length;
     const successful = this.events.filter(e => e.success === true).length;
     const failed = this.events.filter(e => e.success === false).length;
+    const ratedEvents = successful + failed;
     const withDuration = this.events.filter(e => e.duration !== undefined);
 
     const avgResponseTime = withDuration.length > 0
@@ -390,8 +400,8 @@ export class TelyxAnalytics {
       totalEvents,
       totalErrors: this.errors.length,
       totalMetrics: this.metrics.length,
-      successRate: totalEvents > 0 ? successful / totalEvents : 1,
-      errorRate: totalEvents > 0 ? failed / totalEvents : 0,
+      successRate: ratedEvents > 0 ? successful / ratedEvents : 1,
+      errorRate: ratedEvents > 0 ? failed / ratedEvents : 0,
       avgResponseTime,
       topMethods,
       recentErrors: this.errors.slice(-5),

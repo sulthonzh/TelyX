@@ -27,7 +27,8 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({ apiBase }) => {
       // Parse prometheus metrics
       const lines = text.split("\n");
       const pathCounts: Record<string, number> = {};
-      const pathDurations: Record<string, number[]> = {};
+      const pathSum: Record<string, number> = {};
+      const pathCount2: Record<string, number> = {};
       let total = 0;
 
       for (const line of lines) {
@@ -40,12 +41,21 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({ apiBase }) => {
             total += parseInt(match[2]);
           }
         }
-        if (line.startsWith("http_request_duration_seconds_bucket{")) {
+        // Parse histogram _sum and _count to compute average duration
+        if (line.startsWith("http_request_duration_seconds_sum{")) {
           const match = line.match(
-            /http_request_duration_seconds_bucket\{path="([^"]+)",le="([^"]+)"\}\s+(\d+)/
+            /http_request_duration_seconds_sum\{path="([^"]+)"\}\s+([\d.eE+-]+)/
           );
           if (match) {
-            if (!pathDurations[match[1]]) pathDurations[match[1]] = [];
+            pathSum[match[1]] = parseFloat(match[2]);
+          }
+        }
+        if (line.startsWith("http_request_duration_seconds_count{")) {
+          const match = line.match(
+            /http_request_duration_seconds_count\{path="([^"]+)"\}\s+(\d+)/
+          );
+          if (match) {
+            pathCount2[match[1]] = parseInt(match[2]);
           }
         }
       }
@@ -53,7 +63,10 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({ apiBase }) => {
       const paths = Object.entries(pathCounts).map(([path, count]) => ({
         path,
         count,
-        avgDuration: 0,
+        avgDuration:
+          pathCount2[path] > 0 && pathSum[path] !== undefined
+            ? (pathSum[path] / pathCount2[path]) * 1000 // convert seconds → ms
+            : 0,
       }));
 
       setParsed({ totalRequests: total, paths });

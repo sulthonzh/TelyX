@@ -34,12 +34,13 @@ const LogPanel: React.FC<LogPanelProps> = ({ apiBase }) => {
       setTotal(data.total || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch logs");
-      // If backend is down, show empty state
-      if (!logs.length) setLogs([]);
     } finally {
       setLoading(false);
     }
-  }, [apiBase, search, logs.length]);
+    // NOTE: Do not add logs.length to the dependency array below.
+    // It would change the callback identity after every fetch, causing the
+    // useEffect to re-run immediately and defeating the 10-second poll.
+  }, [apiBase, search]);
 
   useEffect(() => {
     fetchLogs();

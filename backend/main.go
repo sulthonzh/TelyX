@@ -101,6 +101,7 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 	jsonData, err := json.Marshal(logData)
 	if err != nil {
 		http.Error(w, `{"error": "Internal server error"}`, http.StatusInternalServerError)
+		requestCount.WithLabelValues("/logs").Inc()
 		span.RecordError(err)
 		span.SetAttributes(semconv.ExceptionMessageKey.String("Failed to marshal log data"))
 		return
@@ -108,10 +109,18 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Send log data to OpenSearch
 	res, err := http.Post(osURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil || res.StatusCode >= 400 {
+	if err != nil {
 		http.Error(w, `{"error": "Failed to send log to OpenSearch"}`, http.StatusInternalServerError)
+		requestCount.WithLabelValues("/logs").Inc()
 		span.RecordError(err)
 		span.SetAttributes(semconv.ExceptionMessageKey.String("Failed to send log to OpenSearch"))
+		return
+	}
+	if res.StatusCode >= 400 {
+		res.Body.Close()
+		http.Error(w, `{"error": "Failed to send log to OpenSearch"}`, http.StatusInternalServerError)
+		requestCount.WithLabelValues("/logs").Inc()
+		span.SetAttributes(semconv.ExceptionMessageKey.String(fmt.Sprintf("OpenSearch returned status %d", res.StatusCode)))
 		return
 	}
 	defer res.Body.Close()

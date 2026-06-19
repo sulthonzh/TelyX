@@ -119,7 +119,7 @@ describe('Telyx', () => {
 
       const batch = getBatch(telyx);
       // Should have a failure event with success=false
-      const failureEvent = batch.events.find(e => e.success === false);
+      const failureEvent = batch.events.find((e: any) => e.success === false);
       expect(failureEvent).toBeDefined();
       expect(failureEvent!.method).toBe('failing_method');
       expect(failureEvent!.success).toBe(false);
@@ -231,12 +231,13 @@ describe('TelyxAnalytics', () => {
 
     it('handles large datasets without stack overflow', () => {
       // Math.min(...array) would blow up at ~100K elements
+      const analytics2 = new TelyxAnalytics(200_000);
       const events = Array.from({ length: 150_000 }, (_, i) =>
         makeEvent({ method: 'heavy', duration: i + 1, success: true })
       );
-      analytics.addEvents(events);
+      analytics2.addEvents(events);
 
-      const perf = analytics.getMethodPerformance('heavy');
+      const perf = analytics2.getMethodPerformance('heavy');
       expect(perf.totalCalls).toBe(150_000);
       expect(perf.minDuration).toBe(1);
       expect(perf.maxDuration).toBe(150_000);
@@ -286,6 +287,38 @@ describe('TelyxAnalytics', () => {
       analytics.addEvents([makeEvent()]);
       analytics.clear();
       expect(analytics.getSystemHealth().totalCalls).toBe(0);
+    });
+  });
+
+  describe('successRate excludes custom events', () => {
+    it('getSystemHealth does not dilute rates with custom events', () => {
+      analytics.addEvents([
+        makeEvent({ event: 'custom_click', success: undefined, method: undefined }),
+        makeEvent({ event: 'custom_page_view', success: undefined, method: undefined }),
+        makeEvent({ event: 'method_success', method: 'api', success: true, duration: 50 }),
+        makeEvent({ event: 'method_failure', method: 'api', success: false, duration: 100 }),
+      ]);
+
+      const health = analytics.getSystemHealth();
+      // totalCalls counts ALL events
+      expect(health.totalCalls).toBe(4);
+      // successRate/errorRate should only consider events with success=true/false
+      expect(health.successRate).toBeCloseTo(0.5); // 1 success / (1 success + 1 failure)
+      expect(health.errorRate).toBeCloseTo(0.5);
+    });
+
+    it('getSummary does not dilute rates with custom events', () => {
+      analytics.addEvents([
+        makeEvent({ event: 'custom', success: undefined }),
+        makeEvent({ event: 'custom2', success: undefined }),
+        makeEvent({ method: 'api', success: true, duration: 10 }),
+      ]);
+
+      const summary = analytics.getSummary();
+      expect(summary.totalEvents).toBe(3);
+      // Only 1 event has success=true out of 1 rated event → 100%
+      expect(summary.successRate).toBe(1);
+      expect(summary.errorRate).toBe(0);
     });
   });
 });
