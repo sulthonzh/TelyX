@@ -38,3 +38,5 @@ temp/
 # os
 .DS_Store
 Thumbs.db
+*.patch
+test-fixes.mjs
