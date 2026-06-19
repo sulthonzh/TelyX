@@ -1,13 +1,9 @@
-import axios, { AxiosInstance } from 'axios';
-import http from 'http';
-import https from 'https';
 import { TelyxConfig, TelyxEvent, TelyxMetric, TelyxError, TelemetryBatch } from '../types';
 
 export type { TelyxConfig, TelyxEvent, TelyxMetric, TelyxError, TelemetryBatch };
 
 export class Telyx {
   private config: Required<TelyxConfig>;
-  private httpClient: AxiosInstance;
   private batch: TelemetryBatch;
   private flushTimer?: NodeJS.Timeout;
   private flushing = false;
@@ -56,18 +52,6 @@ export class Telyx {
       maxAnalyticsRetention: config.maxAnalyticsRetention ?? 10000,
       maxHistoryAgeMs: config.maxHistoryAgeMs ?? 7 * 24 * 60 * 60 * 1000, // 7 days
     };
-
-    this.httpClient = axios.create({
-      baseURL: this.config.endpoint,
-      timeout: 5000,
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': `telyx/${this.config.agentName}`,
-      },
-      validateStatus: (status: number) => status >= 200 && status < 300,
-      httpAgent: new http.Agent({ keepAlive: true }),
-      httpsAgent: new https.Agent({ keepAlive: true }),
-    });
 
     this.batch = {
       events: [],
@@ -332,7 +316,7 @@ export class Telyx {
 
     try {
       const batch = this.retryQueue[0];
-      await this.httpClient.post('/telemetry', batch);
+      await this.postBatch(batch);
       
       this.retryQueue.shift();
       
@@ -379,7 +363,7 @@ export class Telyx {
       const sentMetrics = batchToSend.metrics.length;
       const sentErrors = batchToSend.errors.length;
 
-      await this.httpClient.post('/telemetry', batchToSend);
+      await this.postBatch(batchToSend);
 
       // Trim only the items we actually sent
       this.batch.events.splice(0, sentEvents);
@@ -408,6 +392,34 @@ export class Telyx {
       void this.processRetryQueue();    } finally {
       this.flushing = false;
       this._flushPromise = undefined;
+    }
+  }
+
+  /**
+   * Send a telemetry batch to the endpoint using native fetch.
+   * Throws on non-2xx response so callers can retry.
+   */
+  private async postBatch(batch: TelemetryBatch): Promise<void> {
+    const url = this.config.endpoint.replace(/\/$/, '') + '/telemetry';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': `telyx/${this.config.agentName}`,
+        },
+        body: JSON.stringify(batch),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        throw new Error(`Telemetry POST failed: ${res.status} ${res.statusText}`);
+      }
+    } finally {
+      clearTimeout(timer);
     }
   }
 
