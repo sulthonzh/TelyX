@@ -40,3 +40,7 @@ temp/
 Thumbs.db
 *.patch
 test-fixes.mjs
+__pycache__/
+.venv/
+*.egg-info/
+.mypy_cache/
