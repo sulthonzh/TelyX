@@ -174,31 +174,39 @@ export class TelyxMiddleware {
                 model,
                 duration,
               });
-            } else {
+            } else if (response !== null && typeof response === 'object') {
               const responseObj = response as Record<string, unknown>;
-              const usage = responseObj?.usage as Record<string, unknown> | undefined;
-              const content = responseObj?.content as string | null | undefined;
-              
+              const usage = responseObj?.usage;
+              const content = responseObj?.content;
+
               let tokensUsed = 0;
-              if (usage && typeof usage === 'object' && 'total_tokens' in usage && typeof usage.total_tokens === 'number') {
-                tokensUsed = Math.max(0, usage.total_tokens);
+              if (usage && typeof usage === 'object' && 'total_tokens' in usage && typeof (usage as Record<string, unknown>).total_tokens === 'number') {
+                tokensUsed = Math.max(0, (usage as Record<string, unknown>).total_tokens as number);
               }
-              
-              const responseLength = content ? content.length : 0;
-              
+
+              const responseLength = typeof content === 'string' ? content.length : 0;
+
               this.telyx.recordSuccess('ai_api_call', duration, {
                 provider,
                 model,
                 tokensUsed,
                 responseLength,
               });
-              
+
               if (tokensUsed > 0) {
                 this.telyx.recordMetric('tokens_used', tokensUsed, {
                   provider,
                   model,
                 });
               }
+            } else {
+              // response is null, undefined, or a non-object; still record a success event.
+              this.telyx.recordSuccess('ai_api_call', duration, {
+                provider,
+                model,
+                tokensUsed: 0,
+                responseLength: 0,
+              });
             }
           } catch (error) {
             console.error('[Telyx] Failed to track AI API call:', error);
