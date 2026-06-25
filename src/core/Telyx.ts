@@ -9,9 +9,11 @@ export class Telyx {
   private flushing = false;
   private _flushPromise?: Promise<void>;
   private shutdownHandler?: () => Promise<void>;
-  private retryQueue: TelemetryBatch[] = [];
+  private retryQueue: { batch: TelemetryBatch; attempt: number }[] = [];
   private isRetrying = false;
   private readonly maxRetryQueueSize = 10;
+  private readonly maxRetryAttempts = 5;
+  private readonly baseRetryDelay = 1000;
 
   constructor(config: TelyxConfig) {
     if (typeof config.agentName !== 'string' || config.agentName.trim() === '') {
@@ -315,7 +317,28 @@ export class Telyx {
     this.isRetrying = true;
 
     try {
-      const batch = this.retryQueue[0];
+      const { batch, attempt } = this.retryQueue[0];
+      
+      // Check if we've exceeded max retry attempts
+      if (attempt >= this.maxRetryAttempts) {
+        if (this.config.enableConsole) {
+          console.warn(`[Telyx] Max retry attempts (${this.maxRetryAttempts}) exceeded, dropping batch`);
+        }
+        this.retryQueue.shift();
+        await this.processRetryQueue();
+        return;
+      }
+
+      // Calculate exponential backoff delay: base * 2^attempt
+      const delay = this.baseRetryDelay * Math.pow(2, attempt);
+      
+      if (this.config.enableConsole) {
+        console.log(`[Telyx] Retrying batch (attempt ${attempt + 1}/${this.maxRetryAttempts}) after ${delay}ms delay`);
+      }
+      
+      // Wait for backoff delay
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
       await this.postBatch(batch);
       
       this.retryQueue.shift();
@@ -324,10 +347,16 @@ export class Telyx {
         console.log(`[Telyx] Successfully retried batch with ${batch.events.length} events, ${batch.metrics.length} metrics, ${batch.errors.length} errors`);
       }
       
+      // Continue processing next item in queue
       await this.processRetryQueue();
     } catch (error) {
       if (this.config.enableConsole) {
         console.error('[Telyx] Retry failed, will retry again later:', error);
+      }
+      
+      // Increment attempt count for next retry
+      if (this.retryQueue.length > 0) {
+        this.retryQueue[0].attempt++;
       }
     } finally {
       this.isRetrying = false;
@@ -380,9 +409,12 @@ export class Telyx {
       
       if (this.retryQueue.length < this.maxRetryQueueSize) {
         this.retryQueue.push({
-          events: batchToSend.events,
-          metrics: batchToSend.metrics,
-          errors: batchToSend.errors,
+          batch: {
+            events: batchToSend.events,
+            metrics: batchToSend.metrics,
+            errors: batchToSend.errors,
+          },
+          attempt: 0,
         });
       } else if (this.config.enableConsole) {
         console.warn('[Telyx] Retry queue full, dropping batch');
