@@ -462,7 +462,13 @@ export class Telyx {
     const totalItems = this.batch.events.length + this.batch.metrics.length + this.batch.errors.length;
     
     if (totalItems >= this.config.maxBatchSize) {
-      this.flush();
+      // Fire-and-forget flush; errors handled internally via retry queue.
+      // Catch to prevent unhandled promise rejection in case of unexpected errors.
+      this.flush().catch(err => {
+        if (this.config.enableConsole) {
+          console.error('[Telyx] Unexpected flush error:', err);
+        }
+      });
     }
   }
 
