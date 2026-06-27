@@ -43,6 +43,20 @@ export class Telyx {
       throw new Error('enableConsole must be a boolean');
     }
     
+    if (config.maxAnalyticsRetention !== undefined && 
+        (typeof config.maxAnalyticsRetention !== 'number' || config.maxAnalyticsRetention < 1)) {
+      throw new Error('maxAnalyticsRetention must be a positive number');
+    }
+    
+    if (config.maxHistoryAgeMs !== undefined && 
+        (typeof config.maxHistoryAgeMs !== 'number' || config.maxHistoryAgeMs < 0)) {
+      throw new Error('maxHistoryAgeMs must be a non-negative number');
+    }
+    
+    if (config.endpoint !== undefined && typeof config.endpoint !== 'string') {
+      throw new Error('endpoint must be a string if provided');
+    }
+    
     this.config = {
       endpoint: config.endpoint || 'https://api.telyx.example.com',
       agentName: config.agentName,
