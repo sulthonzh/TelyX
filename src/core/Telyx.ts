@@ -400,18 +400,20 @@ export class Telyx {
       errors: this.batch.errors.slice(),
     };
 
+    // Remove the items we're about to send BEFORE the POST call.
+    // If we wait until after success and the POST fails, the items are still
+    // in this.batch AND in the retry queue → they'd be sent twice (once on
+    // the next flush, once on retry). Clearing upfront guarantees exactly-once.
+    const sentEvents = batchToSend.events.length;
+    const sentMetrics = batchToSend.metrics.length;
+    const sentErrors = batchToSend.errors.length;
+
+    this.batch.events.splice(0, sentEvents);
+    this.batch.metrics.splice(0, sentMetrics);
+    this.batch.errors.splice(0, sentErrors);
+
     try {
-      // Remove only the items we're about to send; keep anything added since snapshot.
-      const sentEvents = batchToSend.events.length;
-      const sentMetrics = batchToSend.metrics.length;
-      const sentErrors = batchToSend.errors.length;
-
       await this.postBatch(batchToSend);
-
-      // Trim only the items we actually sent
-      this.batch.events.splice(0, sentEvents);
-      this.batch.metrics.splice(0, sentMetrics);
-      this.batch.errors.splice(0, sentErrors);
       
       if (this.config.enableConsole) {
         console.log(`[Telyx] Flushed ${batchToSend.events.length} events, ${batchToSend.metrics.length} metrics, ${batchToSend.errors.length} errors`);

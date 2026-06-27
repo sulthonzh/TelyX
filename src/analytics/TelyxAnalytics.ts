@@ -95,6 +95,9 @@ export class TelyxAnalytics {
     // (recordEvent) have no success field and must not inflate failure counts.
     const successfulEvents = this.events.filter(event => event.success === true).length;
     const failedEvents = this.events.filter(event => event.success === false).length;
+    // Only events with an explicit success boolean belong in the denominator.
+    // Custom events (recordEvent) have no success field and would dilute the rates.
+    const ratedEvents = successfulEvents + failedEvents;
 
     // Calculate average response time from all method calls
     const methodEvents = this.events.filter(event => event.duration !== undefined);
@@ -113,8 +116,8 @@ export class TelyxAnalytics {
     return {
       uptime: this.calculateUptime(),
       totalCalls: totalEvents,
-      successRate: totalEvents > 0 ? successfulEvents / totalEvents : 0,
-      errorRate: totalEvents > 0 ? failedEvents / totalEvents : 0,
+      successRate: ratedEvents > 0 ? successfulEvents / ratedEvents : 0,
+      errorRate: ratedEvents > 0 ? failedEvents / ratedEvents : 0,
       averageResponseTime,
       methodPerformance,
     };
@@ -368,6 +371,9 @@ export class TelyxAnalytics {
     const totalEvents = this.events.length;
     const successful = this.events.filter(e => e.success === true).length;
     const failed = this.events.filter(e => e.success === false).length;
+    // Only events with explicit success/failure belong in rate denominators.
+    // Custom events (recordEvent) have no success field and would skew the rates.
+    const ratedEvents = successful + failed;
     const withDuration = this.events.filter(e => e.duration !== undefined);
 
     const avgResponseTime = withDuration.length > 0
@@ -390,8 +396,8 @@ export class TelyxAnalytics {
       totalEvents,
       totalErrors: this.errors.length,
       totalMetrics: this.metrics.length,
-      successRate: totalEvents > 0 ? successful / totalEvents : 1,
-      errorRate: totalEvents > 0 ? failed / totalEvents : 0,
+      successRate: ratedEvents > 0 ? successful / ratedEvents : 1,
+      errorRate: ratedEvents > 0 ? failed / ratedEvents : 0,
       avgResponseTime,
       topMethods,
       recentErrors: this.errors.slice(-5),
