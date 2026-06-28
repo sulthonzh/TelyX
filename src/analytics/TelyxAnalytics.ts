@@ -327,7 +327,7 @@ export class TelyxAnalytics {
           buckets[index].errors++;
         }
 
-        if (event.duration != null) {
+        if (event.duration !== null && event.duration !== undefined) {
           buckets[index].totalDuration += event.duration;
         }
       }

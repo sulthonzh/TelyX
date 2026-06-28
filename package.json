@@ -17,8 +17,10 @@
     "test": "node --test test/telyx.test.mjs test/anomaly-detection.test.mjs",
     "test:watch": "node --test --watch test/telyx.test.mjs test/anomaly-detection.test.mjs",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run clean && npm run build",
-    "example": "node examples/basic-usage.js"
+    "prepublishOnly": "npm run clean && npm run build && npm test && npm run lint",
+    "example": "node examples/basic-usage.js",
+    "lint": "eslint src/",
+    "test:coverage": "c8 node --test test/telyx.test.mjs test/anomaly-detection.test.mjs"
   },
   "keywords": [
     "telemetry",
@@ -48,10 +50,30 @@
     "LICENSE"
   ],
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^20.19.42",
-    "typescript": "^5.0.0"
+    "c8": "^11.0.0",
+    "eslint": "^10.6.0",
+    "globals": "^17.7.0",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.62.0"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "c8": {
+    "include": [
+      "dist/**/*.js"
+    ],
+    "exclude": [
+      "dist/**/*.d.ts",
+      "dist/**/*.test.js",
+      "dist/**/*.map"
+    ],
+    "reporter": [
+      "text",
+      "text-summary",
+      "lcov"
+    ]
   }
 }
