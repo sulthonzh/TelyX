@@ -89,6 +89,9 @@ export class TelyxMiddleware {
           const duration = Date.now() - start;
           
           if (error) {
+            this.telyx.recordFailure('database_query', duration, {
+              query: this.sanitizeQuery(query),
+            });
             this.telyx.recordError('database_query', error, {
               query: this.sanitizeQuery(query),
               duration,
@@ -124,6 +127,10 @@ export class TelyxMiddleware {
         const duration = Date.now() - start;
         
         if (error) {
+          this.telyx.recordFailure('cache_operation', duration, {
+            operation,
+            key,
+          });
           this.telyx.recordError('cache_operation', error, {
             operation,
             key,
@@ -169,6 +176,10 @@ export class TelyxMiddleware {
             const duration = Date.now() - start;
             
             if (error) {
+              this.telyx.recordFailure('ai_api_call', duration, {
+                provider,
+                model,
+              });
               this.telyx.recordError('ai_api_call', error, {
                 provider,
                 model,

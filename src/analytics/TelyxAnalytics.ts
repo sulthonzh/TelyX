@@ -338,9 +338,24 @@ export class TelyxAnalytics {
       count: bucket.count
     }));
 
-    const errorRatePerHour = buckets.map(bucket => ({
+    // Only events with explicit success/failure belong in the denominator.
+    // Custom events (recordEvent) have no success field and would dilute the rate.
+    const ratedPerBucket = new Array(bucketCount).fill(0);
+    for (const event of relevantEvents) {
+      if (event.success === true || event.success === false) {
+        const eventTime = new Date(event.timestamp).getTime();
+        const timeDiffMs = now.getTime() - eventTime;
+        const bucketIndex = Math.floor(timeDiffMs / bucketMs);
+        const index = bucketCount - 1 - bucketIndex;
+        if (index >= 0 && index < bucketCount) {
+          ratedPerBucket[index]++;
+        }
+      }
+    }
+
+    const errorRatePerHour = buckets.map((bucket, i) => ({
       timestamp: bucket.timestamp,
-      rate: bucket.count > 0 ? bucket.errors / bucket.count : 0
+      rate: ratedPerBucket[i] > 0 ? bucket.errors / ratedPerBucket[i] : 0
     }));
 
     const averageResponseTimePerHour = buckets.map(bucket => ({
