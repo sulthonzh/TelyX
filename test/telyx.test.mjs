@@ -179,9 +179,10 @@ describe('TelyxAnalytics', () => {
       { timestamp: new Date().toISOString(), agent: 'a', environment: 't', event: 'custom_click', metadata: {} },
     ]);
     const health = a.getSystemHealth();
-    // totalCalls counts all events (2), but only 1 has success=true
+    // totalCalls counts all events (2), but success/error rates only use
+    // events with an explicit success boolean (1 rated event → 1 success).
     assert.equal(health.totalCalls, 2);
-    assert.equal(health.successRate, 0.5); // 1 out of 2 total
+    assert.equal(health.successRate, 1); // 1 success out of 1 rated event
     assert.equal(health.errorRate, 0); // custom event is NOT a failure
   });
 });

@@ -341,14 +341,20 @@ export class TelyxAnalytics {
     // Only events with explicit success/failure belong in the denominator.
     // Custom events (recordEvent) have no success field and would dilute the rate.
     const ratedPerBucket = new Array(bucketCount).fill(0);
+    // Only events with a duration should count toward average response time.
+    // Custom events (recordEvent) have no duration and would dilute the average.
+    const timedPerBucket = new Array(bucketCount).fill(0);
     for (const event of relevantEvents) {
-      if (event.success === true || event.success === false) {
-        const eventTime = new Date(event.timestamp).getTime();
-        const timeDiffMs = now.getTime() - eventTime;
-        const bucketIndex = Math.floor(timeDiffMs / bucketMs);
-        const index = bucketCount - 1 - bucketIndex;
-        if (index >= 0 && index < bucketCount) {
+      const eventTime = new Date(event.timestamp).getTime();
+      const timeDiffMs = now.getTime() - eventTime;
+      const bucketIndex = Math.floor(timeDiffMs / bucketMs);
+      const index = bucketCount - 1 - bucketIndex;
+      if (index >= 0 && index < bucketCount) {
+        if (event.success === true || event.success === false) {
           ratedPerBucket[index]++;
+        }
+        if (event.duration !== null && event.duration !== undefined) {
+          timedPerBucket[index]++;
         }
       }
     }
@@ -358,9 +364,9 @@ export class TelyxAnalytics {
       rate: ratedPerBucket[i] > 0 ? bucket.errors / ratedPerBucket[i] : 0
     }));
 
-    const averageResponseTimePerHour = buckets.map(bucket => ({
+    const averageResponseTimePerHour = buckets.map((bucket, i) => ({
       timestamp: bucket.timestamp,
-      time: bucket.count > 0 ? bucket.totalDuration / bucket.count : 0
+      time: timedPerBucket[i] > 0 ? bucket.totalDuration / timedPerBucket[i] : 0
     }));
 
     return {
