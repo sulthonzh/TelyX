@@ -133,7 +133,9 @@ export class TelyxAnalytics {
     recentErrors: TelyxError[];
     errorRate: number;
     } {
-    const totalEvents = this.events.length;
+    // Only events with explicit success/failure belong in the denominator.
+    // Custom events (recordEvent) have no success field and would dilute the rate.
+    const ratedEvents = this.events.filter(e => e.success === true || e.success === false).length;
     const errorByMethod: Record<string, number> = {};
     const errorTypes: Record<string, number> = {};
 
@@ -150,7 +152,7 @@ export class TelyxAnalytics {
       errorByMethod,
       errorTypes,
       recentErrors: this.errors.slice(-10),
-      errorRate: totalEvents > 0 ? this.errors.length / totalEvents : 0,
+      errorRate: ratedEvents > 0 ? this.errors.length / ratedEvents : 0,
     };
   }
 

@@ -298,7 +298,9 @@ export class TelyxMiddleware {
     let sanitized = query;
     
     sensitiveWords.forEach(word => {
-      const regex = new RegExp(`\\b${word}\\s*[:=]\\s*['"][^'"]*['"]`, 'gi');
+      // Match both quoted ('value', "value") and unquoted (value) assignments.
+      // Unquoted values stop at whitespace, comma, or semicolon.
+      const regex = new RegExp(`\\b${word}\\s*[:=]\\s*(?:['"][^'"]*['"]|[^,;\\s]+)`, 'gi');
       sanitized = sanitized.replace(regex, `${word}=****`);
     });
     
