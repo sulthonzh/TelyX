@@ -19,6 +19,13 @@ export class Telyx {
     if (typeof config.agentName !== 'string' || config.agentName.trim() === '') {
       throw new Error('agentName is required and must be a non-empty string');
     }
+
+    // Prevent HTTP header injection: agentName is used in the User-Agent
+    // header in postBatch(). CR/LF characters could inject extra headers.
+    if (/[
+]/.test(config.agentName)) {
+      throw new Error('agentName must not contain newline or carriage return characters');
+    }
     
     if (typeof config.environment !== 'string' || config.environment.trim() === '') {
       throw new Error('environment is required and must be a non-empty string');
