@@ -318,6 +318,19 @@ export class Telyx {
   }
 
   /**
+   * Get a snapshot of the current batch (events, metrics, errors).
+   * Returns shallow copies so callers can safely iterate without
+   * concurrent modification from the flush timer.
+   */
+  public getBatch(): TelemetryBatch {
+    return {
+      events: this.batch.events.slice(),
+      metrics: this.batch.metrics.slice(),
+      errors: this.batch.errors.slice(),
+    };
+  }
+
+  /**
    * Flush the current batch to the server
    */
   public async flush(): Promise<void> {

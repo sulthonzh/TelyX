@@ -105,7 +105,7 @@ const mw = new TelyxMiddleware(telyx);
 app.use(mw.httpRequestMiddleware);
 
 // Database queries (auto-sanitizes passwords/secrets)
-const tracker = mw.databaseQueryMiddleware('SELECT * FROM users WHERE id=?', [123]);
+const tracker = mw.databaseQueryMiddleware('SELECT * FROM users WHERE id=?');
 tracker.end({ rowCount: 1 });
 
 // AI API calls (auto-tracks token usage)
