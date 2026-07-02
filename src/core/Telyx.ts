@@ -22,8 +22,7 @@ export class Telyx {
 
     // Prevent HTTP header injection: agentName is used in the User-Agent
     // header in postBatch(). CR/LF characters could inject extra headers.
-    if (/[
-]/.test(config.agentName)) {
+    if (/[\r\n]/.test(config.agentName)) {
       throw new Error('agentName must not contain newline or carriage return characters');
     }
     

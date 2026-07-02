@@ -71,6 +71,11 @@ describe('Telyx', () => {
     // Should not throw on double destroy
     t.destroy();
   });
+
+  it('rejects agentName with newline (HTTP header injection)', () => {
+    assert.throws(() => new Telyx({ agentName: 'bad\nagent', environment: 'test' }), /newline|carriage/i);
+    assert.throws(() => new Telyx({ agentName: 'bad\ragent', environment: 'test' }), /newline|carriage/i);
+  });
 });
 
 // ─── TelyxAnalytics ───
