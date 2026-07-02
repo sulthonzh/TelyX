@@ -212,7 +212,7 @@ app.get('/chat', async (req, res) => {
 - **Interaction Logging** — Capture agent-user interactions with structured metadata
 - **Performance Analytics** — Built-in analytics for identifying bottlenecks
 - **Lightweight & Fast** — Minimal overhead with efficient data collection
-- **Flexible Export** — Multiple output formats (JSON, CSV, database)
+- **Flexible Export** — Multiple output formats (JSON, Markdown report)
 - **Agent-Agnostic** — Works with any AI agent framework
 - **Middleware** — Built-in middleware for HTTP, database, cache, and AI API calls
 - **Retry Queue** — Failed batches automatically retried with exponential backoff

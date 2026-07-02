@@ -210,7 +210,7 @@ describe('TelyxMiddleware', () => {
   it('databaseQueryMiddleware tracks start and end', () => {
     const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });
     const mw = new TelyxMiddleware(t);
-    const tracker = mw.databaseQueryMiddleware('SELECT * FROM users WHERE id = ?', { id: 1 });
+    const tracker = mw.databaseQueryMiddleware('SELECT * FROM users WHERE id = ?');
     tracker.end({ affectedRows: 5 });
     t.destroy();
   });
@@ -226,7 +226,7 @@ describe('TelyxMiddleware', () => {
   it('cacheOperationMiddleware tracks hits and misses', () => {
     const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });
     const mw = new TelyxMiddleware(t);
-    const hit = mw.cacheOperationMiddleware('get', 'user:123', { name: 'Alice' });
+    const hit = mw.cacheOperationMiddleware('get', 'user:123');
     hit.end({ name: 'Alice' });
     const miss = mw.cacheOperationMiddleware('get', 'user:456');
     miss.end(null);
