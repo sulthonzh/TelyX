@@ -55,7 +55,7 @@
     "c8": "^11.0.0",
     "eslint": "^10.6.0",
     "globals": "^17.7.0",
-    "typescript": "^5.0.0",
+    "typescript": "^6.0.0",
     "typescript-eslint": "^8.62.0"
   },
   "engines": {
