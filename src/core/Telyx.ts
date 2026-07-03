@@ -311,10 +311,24 @@ export class Telyx {
           return (...args: unknown[]): Promise<unknown> => {
             const shouldSample = Math.random() < telyx['config'].sampleRate;
             if (!shouldSample) {
-              return Promise.resolve(originalMethod.apply(target, args));
+              // Wrap in a try-catch so synchronous throws become rejections,
+              // matching async method behaviour.
+              try {
+                return Promise.resolve(originalMethod.apply(target, args));
+              } catch (err) {
+                return Promise.reject(err);
+              }
             }
             const start = Date.now();
-            return Promise.resolve(originalMethod.apply(target, args))
+            // Wrap in try-catch: if the method throws synchronously, we must
+            // still record the failure/error and re-throw as a rejection.
+            let resultPromise: Promise<unknown>;
+            try {
+              resultPromise = Promise.resolve(originalMethod.apply(target, args));
+            } catch (err) {
+              resultPromise = Promise.reject(err);
+            }
+            return resultPromise
               .then((result: unknown) => {
                 telyx.recordSuccess(String(prop), Date.now() - start, {
                   input: telyx['sanitizeInput'](args[0]),
