@@ -303,13 +303,35 @@ export class Telyx {
         }
         
         if (typeof target[prop] === 'function') {
-          const originalMethod = target[prop] as (input: unknown) => unknown;
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const trackedMethod = this.trackMethod(String(prop), async (input: unknown, next: () => Promise<unknown>) => {
-            return originalMethod.call(target, input);
-          });
-          
-          return trackedMethod;
+          const originalMethod = target[prop] as (...args: unknown[]) => unknown;
+          const telyx = this;
+
+          // trackMethod only passes the first arg through fn(). For multi-arg
+          // methods, we need to track manually so no arguments are lost.
+          return (...args: unknown[]): Promise<unknown> => {
+            const shouldSample = Math.random() < telyx['config'].sampleRate;
+            if (!shouldSample) {
+              return Promise.resolve(originalMethod.apply(target, args));
+            }
+            const start = Date.now();
+            return Promise.resolve(originalMethod.apply(target, args))
+              .then((result: unknown) => {
+                telyx.recordSuccess(String(prop), Date.now() - start, {
+                  input: telyx['sanitizeInput'](args[0]),
+                });
+                return result;
+              })
+              .catch((err: unknown) => {
+                const duration = Date.now() - start;
+                telyx.recordFailure(String(prop), duration, {
+                  input: telyx['sanitizeInput'](args[0]),
+                });
+                telyx.recordError(String(prop), err, {
+                  input: telyx['sanitizeInput'](args[0]),
+                });
+                throw err;
+              });
+          };
         }
         return target[prop as string];
       },
