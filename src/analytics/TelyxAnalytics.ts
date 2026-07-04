@@ -16,7 +16,9 @@ export class TelyxAnalytics {
    * Add events from telemetry batch
    */
   public addEvents(events: TelyxEvent[]): void {
-    this.events.push(...events);
+    // Use concat instead of push(...events) to avoid RangeError
+    // (Maximum call stack size exceeded) when events is very large.
+    this.events = this.events.concat(events);
     this.cleanupData();
   }
 
@@ -24,7 +26,7 @@ export class TelyxAnalytics {
    * Add metrics from telemetry batch
    */
   public addMetrics(metrics: TelyxMetric[]): void {
-    this.metrics.push(...metrics);
+    this.metrics = this.metrics.concat(metrics);
     this.cleanupData();
   }
 
@@ -32,7 +34,7 @@ export class TelyxAnalytics {
    * Add errors from telemetry batch
    */
   public addErrors(errors: TelyxError[]): void {
-    this.errors.push(...errors);
+    this.errors = this.errors.concat(errors);
     this.cleanupData();
   }
 
