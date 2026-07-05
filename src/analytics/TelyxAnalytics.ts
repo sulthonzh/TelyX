@@ -255,8 +255,13 @@ export class TelyxAnalytics {
     const buckets: Record<string, number> = {};
     spikeEvents.forEach(event => {
       const bucketTime = new Date(event.timestamp);
-      // Include date in bucket key so multi-day data doesn't collide
-      const bucketKey = `${bucketTime.toISOString().substring(0, 10)} ${bucketTime.getHours()}:${Math.floor(bucketTime.getMinutes() / 10) * 10}`;
+      // Include date in bucket key so multi-day data doesn't collide.
+      // Use UTC for both date and time to stay consistent with ISO timestamps
+      // used everywhere else in the codebase. Mixing UTC date with local
+      // hours (getHours) would place events in wrong buckets near midnight.
+      const hh = String(bucketTime.getUTCHours()).padStart(2, '0');
+      const mm = String(Math.floor(bucketTime.getUTCMinutes() / 10) * 10).padStart(2, '0');
+      const bucketKey = `${bucketTime.toISOString().substring(0, 10)} ${hh}:${mm}`;
       buckets[bucketKey] = (buckets[bucketKey] || 0) + 1;
     });
     
