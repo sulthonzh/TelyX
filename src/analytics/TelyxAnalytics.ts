@@ -149,12 +149,18 @@ export class TelyxAnalytics {
       errorTypes[errorType] = (errorTypes[errorType] || 0) + 1;
     });
 
+    // Error rate should be based on failed events vs rated events, not
+    // errors.length vs rated events. errors.length can exceed ratedEvents
+    // when recordError() is called directly (without recordFailure()),
+    // which would produce errorRate > 1.0 — a meaningless value.
+    const failedEvents = this.events.filter(e => e.success === false).length;
+
     return {
       totalErrors: this.errors.length,
       errorByMethod,
       errorTypes,
       recentErrors: this.errors.slice(-10),
-      errorRate: ratedEvents > 0 ? this.errors.length / ratedEvents : 0,
+      errorRate: ratedEvents > 0 ? failedEvents / ratedEvents : 0,
     };
   }
 
