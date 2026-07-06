@@ -33,8 +33,8 @@ export class TelyxMiddleware {
         userAgent: req.get('User-Agent'),
         ip: req.ip,
         headers: {
-          referer: sanitizedHeaders.referer,
-          accept: sanitizedHeaders.accept,
+          'referer': sanitizedHeaders['referer'],
+          'accept': sanitizedHeaders['accept'],
           'accept-language': sanitizedHeaders['accept-language'],
           'cache-control': sanitizedHeaders['cache-control'],
         },
@@ -277,13 +277,14 @@ export class TelyxMiddleware {
       const lowerKey = key.toLowerCase();
       
       if (sensitiveHeaders.includes(lowerKey)) {
-        sanitized[key] = '[REDACTED]';
+        sanitized[lowerKey] = '[REDACTED]';
       } else if (safeHeaders.includes(lowerKey)) {
         // Only include headers that are safe to expose
-        sanitized[key] = value;
+        // Store with lowercase key so consumers can reliably access them
+        sanitized[lowerKey] = value;
       } else {
         // Redact unknown headers to prevent information leakage
-        sanitized[key] = '[HEADER]';
+        sanitized[lowerKey] = '[HEADER]';
       }
     }
     
