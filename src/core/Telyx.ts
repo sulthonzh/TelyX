@@ -473,6 +473,15 @@ export class Telyx {
       if (this.config.enableConsole) {
         console.log(`[Telyx] Flushed ${batchToSend.events.length} events, ${batchToSend.metrics.length} metrics, ${batchToSend.errors.length} errors`);
       }
+
+      // After a successful flush, try to drain any previously-failed batches
+      // from the retry queue. Without this, batches that failed while the
+      // server was down would be stuck forever once the server recovers and
+      // new flushes start succeeding (processRetryQueue was previously only
+      // called in the catch block).
+      if (this.retryQueue.length > 0) {
+        void this.processRetryQueue();
+      }
     } catch (error) {
       if (this.config.enableConsole) {
         console.error('[Telyx] Failed to flush batch, adding to retry queue:', error);
