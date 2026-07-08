@@ -31,8 +31,8 @@ export class Telyx {
       throw new Error('environment is required and must be a non-empty string');
     }
     
-    if (config.sampleRate !== undefined && 
-        (typeof config.sampleRate !== 'number' || config.sampleRate < 0 || config.sampleRate > 1)) {
+    if (config.sampleRate !== undefined &&
+        (typeof config.sampleRate !== 'number' || Number.isNaN(config.sampleRate) || config.sampleRate < 0 || config.sampleRate > 1)) {
       throw new Error('sampleRate must be a number between 0 and 1');
     }
     
@@ -305,12 +305,12 @@ export class Telyx {
         
         if (typeof target[prop] === 'function') {
           const originalMethod = target[prop] as (...args: unknown[]) => unknown;
-          const telyx = this;
 
           // trackMethod only passes the first arg through fn(). For multi-arg
           // methods, we need to track manually so no arguments are lost.
+          // Arrow function captures `this` lexically — no need to alias.
           return (...args: unknown[]): Promise<unknown> => {
-            const shouldSample = Math.random() < telyx['config'].sampleRate;
+            const shouldSample = Math.random() < this.config.sampleRate;
             if (!shouldSample) {
               // Wrap in a try-catch so synchronous throws become rejections,
               // matching async method behaviour.
@@ -331,18 +331,18 @@ export class Telyx {
             }
             return resultPromise
               .then((result: unknown) => {
-                telyx.recordSuccess(String(prop), Date.now() - start, {
-                  input: telyx['sanitizeInput'](args[0]),
+                this.recordSuccess(String(prop), Date.now() - start, {
+                  input: this.sanitizeInput(args[0]),
                 });
                 return result;
               })
               .catch((err: unknown) => {
                 const duration = Date.now() - start;
-                telyx.recordFailure(String(prop), duration, {
-                  input: telyx['sanitizeInput'](args[0]),
+                this.recordFailure(String(prop), duration, {
+                  input: this.sanitizeInput(args[0]),
                 });
-                telyx.recordError(String(prop), err, {
-                  input: telyx['sanitizeInput'](args[0]),
+                this.recordError(String(prop), err, {
+                  input: this.sanitizeInput(args[0]),
                 });
                 throw err;
               });

@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased] — 2026-07-09
+
+### Fixed
+- Reject `NaN` as `sampleRate` (passed range check due to NaN comparison semantics)
+- ESLint `@typescript-eslint/no-this-alias` error in `Telyx.ts` (replaced `const self = this` with arrow functions)
+
+### Added
+- 63 branch coverage tests covering TelyxMiddleware (HTTP, database, cache, AI middleware branches), Telyx core (config validation, sanitizeInput, track proxy, destroy/flush, retry queue), and TelyxAnalytics edge cases
+- Branch coverage improved from 73.53% → 85.2% overall
+- `STATUS.md` with full exceptional checklist audit
+
 ## [1.1.0] — 2026-06-19
 
 ### Breaking Changes
