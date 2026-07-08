@@ -14,6 +14,7 @@ export class Telyx {
   private readonly maxRetryQueueSize = 10;
   private readonly maxRetryAttempts = 5;
   private readonly baseRetryDelay = 1000;
+  private nextRetryTime?: number;
 
   constructor(config: TelyxConfig) {
     if (typeof config.agentName !== 'string' || config.agentName.trim() === '') {
@@ -394,6 +395,7 @@ export class Telyx {
           console.warn(`[Telyx] Max retry attempts (${this.maxRetryAttempts}) exceeded, dropping batch`);
         }
         this.retryQueue.shift();
+        this.nextRetryTime = undefined;
         await this.processRetryQueue();
         return;
       }
@@ -401,16 +403,30 @@ export class Telyx {
       // Calculate exponential backoff delay: base * 2^attempt
       const delay = this.baseRetryDelay * Math.pow(2, attempt);
       
+      // If we have a scheduled retry time, wait until it elapses
+      // This prevents concurrent retries when processRetryQueue is called
+      // multiple times before the delay has expired (e.g., from flush timer
+      // and a new failed batch).
+      if (this.nextRetryTime) {
+        const now = Date.now();
+        if (now < this.nextRetryTime) {
+          const remaining = this.nextRetryTime - now;
+          await new Promise(resolve => setTimeout(resolve, remaining));
+        }
+      }
+      
+      // Schedule the next retry time before attempting the POST
+      // If this retry fails, the next call will respect this delay.
+      this.nextRetryTime = Date.now() + delay;
+      
       if (this.config.enableConsole) {
         console.log(`[Telyx] Retrying batch (attempt ${attempt + 1}/${this.maxRetryAttempts}) after ${delay}ms delay`);
       }
       
-      // Wait for backoff delay
-      await new Promise(resolve => setTimeout(resolve, delay));
-      
       await this.postBatch(batch);
       
       this.retryQueue.shift();
+      this.nextRetryTime = undefined;
       
       if (this.config.enableConsole) {
         console.log(`[Telyx] Successfully retried batch with ${batch.events.length} events, ${batch.metrics.length} metrics, ${batch.errors.length} errors`);
@@ -427,6 +443,7 @@ export class Telyx {
       if (this.retryQueue.length > 0) {
         this.retryQueue[0].attempt++;
       }
+      // nextRetryTime remains set so the next call respects the backoff
     } finally {
       this.isRetrying = false;
     }
