@@ -1,6 +1,10 @@
 {
   "name": "telyx",
-  "version": "1.42.0",
+<<<<<<< HEAD
+  "version": "1.44.0",
+=======
+  "version": "1.43.0",
+>>>>>>> fc8f762 (chore: bump version to 1.43.0)
   "description": "Lightweight telemetry for AI agents — zero dependencies, native fetch, plug-and-play observability for LLM-powered apps",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
