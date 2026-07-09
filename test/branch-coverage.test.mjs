@@ -333,6 +333,61 @@ describe('TelyxMiddleware sanitizeHeaders branches', () => {
   });
 });
 
+describe('TelyxMiddleware sanitizeCacheKey branches', () => {
+  it('redacts token in cache key', () => {
+    const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });
+    const mw = new TelyxMiddleware(t);
+    const tracker = mw.cacheOperationMiddleware('get', 'user:123:token=abc123secret');
+    tracker.end({ id: 1 });
+    // The recorded event should have redacted the token value
+    const batch = t.getBatch();
+    const successEvent = batch.events.find(e => e.event === 'method_success');
+    assert.ok(successEvent);
+    assert.ok(!JSON.stringify(successEvent).includes('abc123secret'));
+    t.destroy();
+  });
+
+  it('redacts session in cache key', () => {
+    const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });
+    const mw = new TelyxMiddleware(t);
+    const tracker = mw.cacheOperationMiddleware('get', 'session=supersecret365');
+    tracker.end(undefined);
+    const batch = t.getBatch();
+    const successEvent = batch.events.find(e => e.event === 'method_success');
+    assert.ok(successEvent);
+    assert.ok(!JSON.stringify(successEvent).includes('supersecret365'));
+    t.destroy();
+  });
+
+  it('truncates long cache keys', () => {
+    const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });
+    const mw = new TelyxMiddleware(t);
+    const longKey = 'a'.repeat(200);
+    const tracker = mw.cacheOperationMiddleware('get', longKey);
+    tracker.end({ id: 1 });
+    const batch = t.getBatch();
+    const successEvent = batch.events.find(e => e.event === 'method_success');
+    assert.ok(successEvent);
+    const recordedKey = successEvent.metadata?.key;
+    assert.ok(recordedKey && recordedKey.endsWith('...'));
+    assert.ok(recordedKey && recordedKey.length <= 103);
+    t.destroy();
+  });
+
+  it('does not redact non-sensitive cache keys', () => {
+    const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });
+    const mw = new TelyxMiddleware(t);
+    const tracker = mw.cacheOperationMiddleware('get', 'user:123:profile');
+    tracker.end({ id: 1 });
+    const batch = t.getBatch();
+    const successEvent = batch.events.find(e => e.event === 'method_success');
+    assert.ok(successEvent);
+    const recordedKey = successEvent.metadata?.key;
+    assert.equal(recordedKey, 'user:123:profile');
+    t.destroy();
+  });
+});
+
 describe('TelyxMiddleware sanitizeQuery branches', () => {
   it('redacts password in quoted values', () => {
     const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });

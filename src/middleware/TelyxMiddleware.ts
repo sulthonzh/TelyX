@@ -121,6 +121,7 @@ export class TelyxMiddleware {
    */
   public cacheOperationMiddleware = (operation: string, key: string) => {
     const start = Date.now();
+    const sanitizedKey = this.sanitizeCacheKey(key);
 
     return {
       end: (result: unknown, error?: unknown) => {
@@ -129,23 +130,43 @@ export class TelyxMiddleware {
         if (error) {
           this.telyx.recordFailure('cache_operation', duration, {
             operation,
-            key,
+            key: sanitizedKey,
           });
           this.telyx.recordError('cache_operation', error, {
             operation,
-            key,
+            key: sanitizedKey,
             duration,
           });
         } else {
           this.telyx.recordSuccess('cache_operation', duration, {
             operation,
-            key,
+            key: sanitizedKey,
             hit: result !== undefined,
           });
         }
       },
     };
   };
+
+  /**
+   * Sanitize cache keys to prevent leaking sensitive data.
+   * Cache keys often embed session tokens, API keys, user PII, etc.
+   * Truncates to 100 chars and redacts known sensitive patterns.
+   */
+  private sanitizeCacheKey(key: string): string {
+    if (typeof key !== 'string') {
+      return String(key);
+    }
+
+    const sensitivePatterns = ['token', 'session', 'secret', 'password', 'key', 'auth', 'credential'];
+    let sanitized = key;
+    for (const pattern of sensitivePatterns) {
+      // Redact values that look like pattern=value or pattern:value
+      const regex = new RegExp(`(${pattern}[:=])[^,;\\s&|]+`, 'gi');
+      sanitized = sanitized.replace(regex, '$1****');
+    }
+    return sanitized.substring(0, 100) + (sanitized.length > 100 ? '...' : '');
+  }
 
   /**
    * AI API call middleware
