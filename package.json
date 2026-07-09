@@ -1,10 +1,6 @@
 {
   "name": "telyx",
-<<<<<<< HEAD
   "version": "1.44.0",
-=======
-  "version": "1.43.0",
->>>>>>> fc8f762 (chore: bump version to 1.43.0)
   "description": "Lightweight telemetry for AI agents — zero dependencies, native fetch, plug-and-play observability for LLM-powered apps",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,8 +14,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "node --test test/telyx.test.mjs test/anomaly-detection.test.mjs",
-    "test:watch": "node --test --watch test/telyx.test.mjs test/anomaly-detection.test.mjs",
+    "test": "node --test test/telyx.test.mjs test/anomaly-detection.test.mjs test/branch-coverage.test.mjs",
+    "test:watch": "node --test --watch test/telyx.test.mjs test/anomaly-detection.test.mjs test/branch-coverage.test.mjs",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build && npm test && npm run lint",
     "example": "node examples/basic-usage.js",
