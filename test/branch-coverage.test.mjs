@@ -276,12 +276,13 @@ describe('TelyxMiddleware sanitizeHeaders branches', () => {
       'Proxy-Authorization': 'proxy',
       'WWW-Authenticate': 'www',
     });
-    assert.equal(sanitized['Authorization'], '[REDACTED]');
-    assert.equal(sanitized['Cookie'], '[REDACTED]');
-    assert.equal(sanitized['Set-Cookie'], '[REDACTED]');
-    assert.equal(sanitized['X-API-Key'], '[REDACTED]');
+    // sanitizeHeaders() converts all keys to lowercase
+    assert.equal(sanitized['authorization'], '[REDACTED]');
+    assert.equal(sanitized['cookie'], '[REDACTED]');
+    assert.equal(sanitized['set-cookie'], '[REDACTED]');
+    assert.equal(sanitized['x-api-key'], '[REDACTED]');
     assert.equal(sanitized['password'], '[REDACTED]');
-    assert.equal(sanitized['WWW-Authenticate'], '[REDACTED]');
+    assert.equal(sanitized['www-authenticate'], '[REDACTED]');
     t.destroy();
   });
 
@@ -301,9 +302,10 @@ describe('TelyxMiddleware sanitizeHeaders branches', () => {
       'Referer': 'https://example.com',
       'Pragma': 'no-cache',
     });
-    assert.equal(sanitized['Accept'], 'text/html');
-    assert.equal(sanitized['Content-Type'], 'application/json');
-    assert.equal(sanitized['User-Agent'], 'TestAgent/1.0');
+    // sanitizeHeaders() converts all keys to lowercase
+    assert.equal(sanitized['accept'], 'text/html');
+    assert.equal(sanitized['content-type'], 'application/json');
+    assert.equal(sanitized['user-agent'], 'TestAgent/1.0');
     t.destroy();
   });
 
@@ -314,8 +316,9 @@ describe('TelyxMiddleware sanitizeHeaders branches', () => {
       'X-Custom-Header': 'custom-value',
       'X-Trace-Id': 'abc123',
     });
-    assert.equal(sanitized['X-Custom-Header'], '[HEADER]');
-    assert.equal(sanitized['X-Trace-Id'], '[HEADER]');
+    // sanitizeHeaders() converts all keys to lowercase
+    assert.equal(sanitized['x-custom-header'], '[HEADER]');
+    assert.equal(sanitized['x-trace-id'], '[HEADER]');
     t.destroy();
   });
 
@@ -486,8 +489,10 @@ describe('Telyx config validation edge cases', () => {
     t.destroy();
   });
 
+
+
   it('rejects NaN sampleRate', () => {
-    // NaN fails the range check (NaN < 0 is false, NaN > 1 is false)
+    // NaN is explicitly rejected by the validation logic
     assert.throws(() => {
       new Telyx({ agentName: 'test', environment: 'test', sampleRate: NaN });
     }, /sampleRate must be a number between 0 and 1/);
