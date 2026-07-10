@@ -53,6 +53,17 @@ describe('Telyx', () => {
     // Should not throw even though nothing is recorded
     t.recordEvent('test');
     t.recordMetric('test', 1);
+    t.recordError('test', new Error('test error'));
+    t.destroy();
+  });
+
+  it('sampleRate 1 always records errors', () => {
+    const t = new Telyx({ agentName: 'test', environment: 'test', sampleRate: 1, enableConsole: false });
+    // With sampleRate 1, all errors should be recorded
+    t.recordError('test', new Error('test error'));
+    const batch = t.getBatch();
+    // Verify error was recorded (sampleRate=1 means 100% sampling)
+    assert.ok(batch.errors.length > 0, 'error should be recorded with sampleRate=1');
     t.destroy();
   });
 

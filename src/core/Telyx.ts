@@ -272,6 +272,10 @@ export class Telyx {
       throw new Error('metadata must be an object if provided');
     }
     
+    const shouldSample = Math.random() < this.config.sampleRate;
+    
+    if (!shouldSample) return;
+    
     const errorEvent: TelyxError = {
       timestamp: new Date().toISOString(),
       agent: this.config.agentName,
