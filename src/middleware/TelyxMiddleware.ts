@@ -164,7 +164,9 @@ export class TelyxMiddleware {
     let sanitized = key;
     for (const pattern of sensitivePatterns) {
       // Redact values that look like pattern=value or pattern:value
-      const regex = new RegExp(`(${pattern}[:=])[^,;\\s&|]+`, 'gi');
+      // \b word boundary prevents false positives on substrings (e.g. 'key'
+      // matching inside 'monkey=', 'keyboard='). Consistent with sanitizeQuery().
+      const regex = new RegExp(`\\b(${pattern}[:=])[^,;\\s&|]+`, 'gi');
       sanitized = sanitized.replace(regex, '$1****');
     }
     return sanitized.substring(0, 100) + (sanitized.length > 100 ? '...' : '');
