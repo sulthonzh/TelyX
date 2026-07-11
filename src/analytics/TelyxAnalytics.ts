@@ -310,7 +310,7 @@ export class TelyxAnalytics {
     const buckets = Array(bucketCount).fill(null).map((_, i) => {
       const bucketStart = new Date(now.getTime() - (bucketCount - 1 - i) * bucketMs);
       const timeKey = timeRange === '1h'
-        ? bucketStart.toISOString().substring(14, 19) // HH:MM
+        ? bucketStart.toISOString().substring(11, 16) // HH:MM
         : bucketStart.toISOString().substring(0, 13); // YYYY-MM-DDTHH
       
       return {
