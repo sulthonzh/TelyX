@@ -60,12 +60,25 @@ export class Telyx {
       throw new Error('maxHistoryAgeMs must be a non-negative number');
     }
     
-    if (config.endpoint !== undefined && typeof config.endpoint !== 'string') {
-      throw new Error('endpoint must be a string if provided');
+    if (config.endpoint !== undefined) {
+      if (typeof config.endpoint !== 'string') {
+        throw new Error('endpoint must be a string if provided');
+      }
+      // Trim whitespace — a whitespace-padded endpoint produces invalid URLs
+      const trimmed = config.endpoint.trim();
+      if (trimmed === '') {
+        throw new Error('endpoint must not be empty if provided');
+      }
+      // Basic URL validation — catch typos like 'htp://' or bare hostnames
+      try {
+        new URL(trimmed);
+      } catch {
+        throw new Error(`endpoint must be a valid URL: ${trimmed}`);
+      }
     }
     
     this.config = {
-      endpoint: config.endpoint || 'https://api.telyx.example.com',
+      endpoint: (config.endpoint?.trim() || 'https://api.telyx.example.com').replace(/\/+$/, ''),
       agentName: config.agentName,
       environment: config.environment,
       sampleRate: config.sampleRate ?? 1.0,
@@ -533,7 +546,7 @@ export class Telyx {
    * Throws on non-2xx response so callers can retry.
    */
   private async postBatch(batch: TelemetryBatch): Promise<void> {
-    const url = this.config.endpoint.replace(/\/$/, '') + '/telemetry';
+    const url = this.config.endpoint + '/telemetry';
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
 

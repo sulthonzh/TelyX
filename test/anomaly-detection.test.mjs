@@ -99,6 +99,24 @@ describe('Telyx Input Validation', () => {
     assert.throws(() => {
       new Telyx({ agentName: 'test', environment: 'test', maxBatchSize: 0 });
     }, /maxBatchSize must be a positive number/);
+
+    // Endpoint validation
+    assert.throws(() => {
+      new Telyx({ agentName: 'test', environment: 'test', endpoint: '   ' });
+    }, /endpoint must not be empty/);
+
+    assert.throws(() => {
+      new Telyx({ agentName: 'test', environment: 'test', endpoint: 'not-a-url' });
+    }, /endpoint must be a valid URL/);
+
+    assert.throws(() => {
+      new Telyx({ agentName: 'test', environment: 'test', endpoint: 123 });
+    }, /endpoint must be a string/);
+
+    // Valid endpoints with trailing slashes should be normalized
+    const t = new Telyx({ agentName: 'test', environment: 'test', endpoint: 'https://telemetry.example.com/' });
+    assert.ok(t);
+    t.destroy();
   });
 
   it('validates recordEvent parameters', () => {
