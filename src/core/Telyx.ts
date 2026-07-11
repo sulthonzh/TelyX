@@ -285,9 +285,13 @@ export class Telyx {
       throw new Error('metadata must be an object if provided');
     }
     
-    const shouldSample = Math.random() < this.config.sampleRate;
-    
-    if (!shouldSample) return;
+    // Note: No sampling here. recordError is always called from a context
+    // that already applied sampling (trackMethod, track Proxy, or direct
+    // caller). Adding sampling here would cause double-sampling: e.g. at
+    // sampleRate=0.5, trackMethod samples once (50%), then recordError
+    // samples again (25% net), creating orphaned failure events without
+    // corresponding error details. recordSuccess and recordFailure are
+    // also unsampled for the same reason.
     
     const errorEvent: TelyxError = {
       timestamp: new Date().toISOString(),

@@ -45,9 +45,9 @@ describe('TelyxMiddleware httpRequestMiddleware branches', () => {
       send: () => { throw new Error('send failed'); },
     };
     mw.httpRequestMiddleware({ method: 'GET', url: '/test', get: () => '' }, res, () => { nextCalled++; });
-    // The wrapped send catches errors from both telemetry and originalSend,
-    // so it should NOT throw — it logs and swallows.
-    res.send('body');
+    // After round 28 fix, telemetry errors are isolated from originalSend.
+    // originalSend errors propagate naturally (not swallowed).
+    assert.throws(() => res.send('body'), { message: 'send failed' });
     assert.equal(nextCalled, 1);
     t.destroy();
   });
