@@ -42,10 +42,16 @@ export class TelyxMiddleware {
 
       const originalSend = res.send;
       res.send = (body: unknown) => {
+        // Telemetry and response sending are isolated so that:
+        // 1. A telemetry error never causes a double-send (if originalSend
+        //    threw on the first call, retrying it in a combined catch block
+        //    would send the response twice).
+        // 2. An originalSend error is never silently swallowed — it
+        //    propagates to the caller as expected.
         try {
           const duration = Date.now() - start;
           const statusCode = res.statusCode;
-          
+
           this.telyx.recordEvent('http_response', {
             method: req.method,
             url: req.url,
@@ -53,17 +59,13 @@ export class TelyxMiddleware {
             duration,
             contentLength: typeof body === 'string' ? body.length : 0,
           });
-
-          return originalSend.call(res, body);
         } catch (error) {
           // If telemetry fails, don't break the response
           console.error('[Telyx] Failed to track HTTP response:', error);
-          try {
-            return originalSend.call(res, body);
-          } catch (sendError) {
-            console.error('[Telyx] Failed to send response after telemetry error:', sendError);
-          }
         }
+
+        // Always call the original send — errors propagate naturally
+        return originalSend.call(res, body);
       };
 
       next();
