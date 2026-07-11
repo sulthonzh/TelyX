@@ -4,4 +4,4 @@ export { TelyxAnalytics } from './analytics/TelyxAnalytics';
 export * from './types';
 
 // Version
-export const VERSION = '1.41.0';
+export const VERSION = '1.52.0';
