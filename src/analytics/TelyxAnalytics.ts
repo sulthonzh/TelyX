@@ -166,6 +166,14 @@ export class TelyxAnalytics {
 
   /**
    * Get usage metrics
+   *
+   * Counts from method success/failure events (recordSuccess/recordFailure)
+   * which are NOT sampled, rather than custom 'ai_api_call' events
+   * (recordEvent) which ARE sampled at sampleRate < 1.
+   * aiCallMiddleware calls recordSuccess/recordFailure directly (not via
+   * trackMethod or track Proxy), so those events represent the true call
+   * count regardless of sampleRate. Token totals are extracted from the
+   * tokensUsed field in success metadata, also unsampled.
    */
   public getUsageMetrics(): {
     totalTokens: number;
@@ -174,29 +182,37 @@ export class TelyxAnalytics {
     providerUsage: Record<string, number>;
     modelUsage: Record<string, number>;
     } {
-    const aiEvents = this.events.filter(event => event.event === 'ai_api_call');
-    const tokenMetrics = this.metrics.filter(metric => metric.metric === 'tokens_used');
+    // recordSuccess and recordFailure create events with method='ai_api_call'
+    // and success=true/false. These bypass sampling, so they reflect the
+    // true number of AI API calls even at sampleRate < 1.
+    const aiMethodEvents = this.events.filter(
+      event => event.method === 'ai_api_call' && event.success !== undefined
+    );
 
     let totalTokens = 0;
     const providerUsage: Record<string, number> = {};
     const modelUsage: Record<string, number> = {};
 
-    aiEvents.forEach(event => {
-      const provider = (event.metadata as Record<string, unknown>)?.provider as string || 'unknown';
-      const model = (event.metadata as Record<string, unknown>)?.model as string || 'unknown';
-      
+    aiMethodEvents.forEach(event => {
+      const meta = (event.metadata || {}) as Record<string, unknown>;
+      const provider = meta.provider as string || 'unknown';
+      const model = meta.model as string || 'unknown';
+
       providerUsage[provider] = (providerUsage[provider] || 0) + 1;
       modelUsage[model] = (modelUsage[model] || 0) + 1;
+
+      // Only success events carry tokensUsed in their metadata.
+      if (event.success && typeof meta.tokensUsed === 'number') {
+        totalTokens += meta.tokensUsed;
+      }
     });
 
-    tokenMetrics.forEach(metric => {
-      totalTokens += metric.value;
-    });
+    const successfulCalls = aiMethodEvents.filter(e => e.success).length;
 
     return {
       totalTokens,
-      averageTokensPerCall: tokenMetrics.length > 0 ? totalTokens / tokenMetrics.length : 0,
-      totalApiCalls: aiEvents.length,
+      averageTokensPerCall: successfulCalls > 0 ? totalTokens / successfulCalls : 0,
+      totalApiCalls: aiMethodEvents.length,
       providerUsage,
       modelUsage,
     };
