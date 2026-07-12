@@ -160,13 +160,11 @@ describe('TelyxAnalytics', () => {
 
   it('getUsageMetrics tracks token usage', () => {
     const a = new TelyxAnalytics();
+    // getUsageMetrics filters by method === 'ai_api_call' (not event name)
+    // and reads tokens from metadata.tokensUsed (not from metrics array).
     a.addEvents([
-      makeEvent({ event: 'ai_api_call', metadata: { provider: 'openai', model: 'gpt-4' } }),
-      makeEvent({ event: 'ai_api_call', metadata: { provider: 'anthropic', model: 'claude-3' } }),
-    ]);
-    a.addMetrics([
-      { timestamp: new Date().toISOString(), agent: 'a', environment: 't', metric: 'tokens_used', value: 500 },
-      { timestamp: new Date().toISOString(), agent: 'a', environment: 't', metric: 'tokens_used', value: 300 },
+      makeEvent({ method: 'ai_api_call', event: 'method_success', success: true, metadata: { provider: 'openai', model: 'gpt-4', tokensUsed: 500 } }),
+      makeEvent({ method: 'ai_api_call', event: 'method_success', success: true, metadata: { provider: 'anthropic', model: 'claude-3', tokensUsed: 300 } }),
     ]);
     const usage = a.getUsageMetrics();
     assert.equal(usage.totalTokens, 800);

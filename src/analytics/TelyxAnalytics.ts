@@ -239,7 +239,7 @@ export class TelyxAnalytics {
       if (event.success === false) {
         stats.errors++;
       }
-      if (event.duration) {
+      if (event.duration !== undefined && event.duration !== null) {
         stats.totalTime += event.duration;
       }
       methodStats[event.method] = stats;
