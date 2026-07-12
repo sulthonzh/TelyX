@@ -417,58 +417,62 @@ export class Telyx {
     this.isRetrying = true;
 
     try {
-      const { batch, attempt } = this.retryQueue[0];
-      
-      // Check if we've exceeded max retry attempts
-      if (attempt >= this.maxRetryAttempts) {
-        if (this.config.enableConsole) {
-          console.warn(`[Telyx] Max retry attempts (${this.maxRetryAttempts}) exceeded, dropping batch`);
+      // Process items in a loop instead of using recursion.
+      // The previous recursive approach had a bug: after dropping a batch
+      // that exceeded maxRetryAttempts, the recursive call to
+      // processRetryQueue() returned immediately because isRetrying was
+      // still true, stranding remaining items until the next external
+      // trigger.
+      while (this.retryQueue.length > 0) {
+        const { batch, attempt } = this.retryQueue[0];
+
+        // Check if we've exceeded max retry attempts
+        if (attempt >= this.maxRetryAttempts) {
+          if (this.config.enableConsole) {
+            console.warn(`[Telyx] Max retry attempts (${this.maxRetryAttempts}) exceeded, dropping batch`);
+          }
+          this.retryQueue.shift();
+          this.nextRetryTime = undefined;
+          continue;
         }
+
+        // Calculate exponential backoff delay: base * 2^attempt
+        const delay = this.baseRetryDelay * Math.pow(2, attempt);
+
+        // If we have a scheduled retry time, wait until it elapses
+        // This prevents concurrent retries when processRetryQueue is called
+        // multiple times before the delay has expired (e.g., from flush timer
+        // and a new failed batch).
+        if (this.nextRetryTime) {
+          const now = Date.now();
+          if (now < this.nextRetryTime) {
+            const remaining = this.nextRetryTime - now;
+            await new Promise(resolve => setTimeout(resolve, remaining));
+          }
+        }
+
+        // Schedule the next retry time before attempting the POST
+        // If this retry fails, the next call will respect this delay.
+        this.nextRetryTime = Date.now() + delay;
+
+        if (this.config.enableConsole) {
+          console.log(`[Telyx] Retrying batch (attempt ${attempt + 1}/${this.maxRetryAttempts}) after ${delay}ms delay`);
+        }
+
+        await this.postBatch(batch);
+
         this.retryQueue.shift();
         this.nextRetryTime = undefined;
-        await this.processRetryQueue();
-        return;
-      }
 
-      // Calculate exponential backoff delay: base * 2^attempt
-      const delay = this.baseRetryDelay * Math.pow(2, attempt);
-      
-      // If we have a scheduled retry time, wait until it elapses
-      // This prevents concurrent retries when processRetryQueue is called
-      // multiple times before the delay has expired (e.g., from flush timer
-      // and a new failed batch).
-      if (this.nextRetryTime) {
-        const now = Date.now();
-        if (now < this.nextRetryTime) {
-          const remaining = this.nextRetryTime - now;
-          await new Promise(resolve => setTimeout(resolve, remaining));
+        if (this.config.enableConsole) {
+          console.log(`[Telyx] Successfully retried batch with ${batch.events.length} events, ${batch.metrics.length} metrics, ${batch.errors.length} errors`);
         }
       }
-      
-      // Schedule the next retry time before attempting the POST
-      // If this retry fails, the next call will respect this delay.
-      this.nextRetryTime = Date.now() + delay;
-      
-      if (this.config.enableConsole) {
-        console.log(`[Telyx] Retrying batch (attempt ${attempt + 1}/${this.maxRetryAttempts}) after ${delay}ms delay`);
-      }
-      
-      await this.postBatch(batch);
-      
-      this.retryQueue.shift();
-      this.nextRetryTime = undefined;
-      
-      if (this.config.enableConsole) {
-        console.log(`[Telyx] Successfully retried batch with ${batch.events.length} events, ${batch.metrics.length} metrics, ${batch.errors.length} errors`);
-      }
-      
-      // Continue processing next item in queue
-      await this.processRetryQueue();
     } catch (error) {
       if (this.config.enableConsole) {
         console.error('[Telyx] Retry failed, will retry again later:', error);
       }
-      
+
       // Increment attempt count for next retry
       if (this.retryQueue.length > 0) {
         this.retryQueue[0].attempt++;
