@@ -92,13 +92,15 @@ export class TelyxAnalytics {
     averageResponseTime: number;
     methodPerformance: Record<string, unknown>;
     } {
-    const totalEvents = this.events.length;
     // Only count events that have an explicit success boolean — custom events
-    // (recordEvent) have no success field and must not inflate failure counts.
+    // (recordEvent) have no success field and must not inflate totals.
     const successfulEvents = this.events.filter(event => event.success === true).length;
     const failedEvents = this.events.filter(event => event.success === false).length;
     // Only events with an explicit success boolean belong in the denominator.
     // Custom events (recordEvent) have no success field and would dilute the rates.
+    // totalCalls must equal ratedEvents — using this.events.length here would
+    // count custom events (http_request, user_signup, etc.) as "calls",
+    // producing misleading system health metrics.
     const ratedEvents = successfulEvents + failedEvents;
 
     // Calculate average response time from all method calls
@@ -117,7 +119,7 @@ export class TelyxAnalytics {
 
     return {
       uptime: this.calculateUptime(),
-      totalCalls: totalEvents,
+      totalCalls: ratedEvents,
       successRate: ratedEvents > 0 ? successfulEvents / ratedEvents : 0,
       errorRate: ratedEvents > 0 ? failedEvents / ratedEvents : 0,
       averageResponseTime,

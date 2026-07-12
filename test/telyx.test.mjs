@@ -193,9 +193,9 @@ describe('TelyxAnalytics', () => {
       { timestamp: new Date().toISOString(), agent: 'a', environment: 't', event: 'custom_click', metadata: {} },
     ]);
     const health = a.getSystemHealth();
-    // totalCalls counts all events (2), but success/error rates only use
-    // events with an explicit success boolean (1 rated event → 1 success).
-    assert.equal(health.totalCalls, 2);
+    // totalCalls counts only method events (1 success), not custom events.
+    // Custom events (recordEvent) have no success field — they aren't "calls".
+    assert.equal(health.totalCalls, 1);
     assert.equal(health.successRate, 1); // 1 success out of 1 rated event
     assert.equal(health.errorRate, 0); // custom event is NOT a failure
   });
