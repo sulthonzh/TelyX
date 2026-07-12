@@ -143,7 +143,10 @@ export class TelyxMiddleware {
           this.telyx.recordSuccess('cache_operation', duration, {
             operation,
             key: sanitizedKey,
-            hit: result !== undefined,
+            // Use loose null check so both null and undefined register as cache
+            // misses. Many cache backends (Redis, Memcached) return null for
+            // missing keys — strict !== undefined would treat those as hits.
+            hit: result != null,
           });
         }
       },

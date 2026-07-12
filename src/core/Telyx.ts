@@ -392,6 +392,15 @@ export class Telyx {
    */
   public async flush(): Promise<void> {
     if (!this._flushPromise) {
+      // Guard: skip flush when batch is empty. Without this, _flushInternal()
+      // would return a resolved Promise that gets assigned to _flushPromise,
+      // causing all subsequent flush() calls to short-circuit on a stale
+      // resolved promise instead of checking for new data.
+      if (this.batch.events.length === 0 &&
+          this.batch.metrics.length === 0 &&
+          this.batch.errors.length === 0) {
+        return;
+      }
       this._flushPromise = this._flushInternal();
     }
     return this._flushPromise;
@@ -475,11 +484,6 @@ export class Telyx {
    */
   private async _flushInternal(): Promise<void> {
     if (this.flushing) {
-      return;
-    }
-
-    if (this.batch.events.length === 0 && this.batch.metrics.length === 0 && this.batch.errors.length === 0) {
-      this._flushPromise = undefined;
       return;
     }
 
