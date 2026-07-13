@@ -79,6 +79,38 @@ describe('TelyxMiddleware httpRequestMiddleware branches', () => {
     res.send('ok');
     t.destroy();
   });
+
+  it('tracks response via res.end() when res.send() is not called', () => {
+    const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });
+    const mw = new TelyxMiddleware(t);
+    const res = { statusCode: 200, send: () => {}, end: function() { return this; } };
+    mw.httpRequestMiddleware({ method: 'GET', url: '/stream', get: () => '', headers: {} }, res, () => {});
+    // Simulate a route that uses res.end() directly (no res.send)
+    res.end();
+    const batch = t.getBatch();
+    const responses = batch.events.filter(e => e.event === 'http_response');
+    assert.equal(responses.length, 1);
+    assert.equal(responses[0].metadata?.url, '/stream');
+    t.destroy();
+  });
+
+  it('does not double-record when res.send() internally calls res.end()', () => {
+    const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });
+    const mw = new TelyxMiddleware(t);
+    // Simulate Express: res.send() calls res.end() internally
+    const res = {
+      statusCode: 200,
+      send: function(body) { this.end(); return this; },
+      end: function() { return this; },
+    };
+    mw.httpRequestMiddleware({ method: 'POST', url: '/api', get: () => '', headers: {} }, res, () => {});
+    res.send('hello');
+    const batch = t.getBatch();
+    const responses = batch.events.filter(e => e.event === 'http_response');
+    // Should record exactly once — _telyxRecorded guard prevents double-counting
+    assert.equal(responses.length, 1);
+    t.destroy();
+  });
 });
 
 describe('TelyxMiddleware databaseQueryMiddleware branches', () => {

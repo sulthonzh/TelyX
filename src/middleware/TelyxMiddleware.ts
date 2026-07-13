@@ -40,6 +40,27 @@ export class TelyxMiddleware {
         },
       });
 
+      // Record the HTTP response telemetry exactly once.
+      // res.send() calls res.end() internally in Express, so we wrap both
+      // and use _telyxRecorded to prevent double-counting. Without wrapping
+      // res.end(), responses sent via res.end(), res.redirect(),
+      // res.sendFile(), etc. would go untracked.
+      const recordResponse = (body: unknown) => {
+        if ((res as Record<string, boolean>)._telyxRecorded) return;
+        (res as Record<string, boolean>)._telyxRecorded = true;
+
+        const duration = Date.now() - start;
+        const statusCode = res.statusCode;
+
+        this.telyx.recordEvent('http_response', {
+          method: req.method,
+          url: req.url,
+          statusCode,
+          duration,
+          contentLength: typeof body === 'string' ? body.length : 0,
+        });
+      };
+
       const originalSend = res.send;
       res.send = (body: unknown) => {
         // Telemetry and response sending are isolated so that:
@@ -49,16 +70,7 @@ export class TelyxMiddleware {
         // 2. An originalSend error is never silently swallowed — it
         //    propagates to the caller as expected.
         try {
-          const duration = Date.now() - start;
-          const statusCode = res.statusCode;
-
-          this.telyx.recordEvent('http_response', {
-            method: req.method,
-            url: req.url,
-            statusCode,
-            duration,
-            contentLength: typeof body === 'string' ? body.length : 0,
-          });
+          recordResponse(body);
         } catch (error) {
           // If telemetry fails, don't break the response
           console.error('[Telyx] Failed to track HTTP response:', error);
@@ -67,6 +79,25 @@ export class TelyxMiddleware {
         // Always call the original send — errors propagate naturally
         return originalSend.call(res, body);
       };
+
+      // Also wrap res.end() — Express routes that use res.end(),
+      // res.redirect(), res.sendFile(), or streaming don't call res.send(),
+      // so without this wrapper those responses would be invisible to telemetry.
+      const originalEnd = typeof (res as Record<string, unknown>).end === 'function'
+        ? (res as Record<string, (...args: unknown[]) => unknown>).end
+        : undefined;
+      if (originalEnd) {
+        (res as Record<string, (...args: unknown[]) => unknown>).end = function (this: typeof res, ...args: unknown[]): unknown {
+          try {
+            // res.end() can be called with (chunk), (chunk, encoding), or (cb) —
+            // the first arg is a Buffer/string or undefined.
+            recordResponse(typeof args[0] === 'string' ? args[0] : undefined);
+          } catch (error) {
+            console.error('[Telyx] Failed to track HTTP response (end):', error);
+          }
+          return originalEnd.apply(this as typeof res, args);
+        };
+      }
 
       next();
     } catch (error) {
