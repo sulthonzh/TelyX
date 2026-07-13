@@ -160,27 +160,31 @@ export class TelyxMiddleware {
 
     return {
       end: (result: unknown, error?: unknown) => {
-        const duration = Date.now() - start;
-        
-        if (error) {
-          this.telyx.recordFailure('cache_operation', duration, {
-            operation,
-            key: sanitizedKey,
-          });
-          this.telyx.recordError('cache_operation', error, {
-            operation,
-            key: sanitizedKey,
-            duration,
-          });
-        } else {
-          this.telyx.recordSuccess('cache_operation', duration, {
-            operation,
-            key: sanitizedKey,
-            // Use loose null check so both null and undefined register as cache
-            // misses. Many cache backends (Redis, Memcached) return null for
-            // missing keys — strict !== undefined would treat those as hits.
-            hit: result != null,
-          });
+        try {
+          const duration = Date.now() - start;
+
+          if (error) {
+            this.telyx.recordFailure('cache_operation', duration, {
+              operation,
+              key: sanitizedKey,
+            });
+            this.telyx.recordError('cache_operation', error, {
+              operation,
+              key: sanitizedKey,
+              duration,
+            });
+          } else {
+            this.telyx.recordSuccess('cache_operation', duration, {
+              operation,
+              key: sanitizedKey,
+              // Use loose null check so both null and undefined register as cache
+              // misses. Many cache backends (Redis, Memcached) return null for
+              // missing keys — strict !== undefined would treat those as hits.
+              hit: result != null,
+            });
+          }
+        } catch (error) {
+          console.error('[Telyx] Failed to track cache operation:', error);
         }
       },
     };
