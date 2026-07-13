@@ -107,8 +107,13 @@ export class Telyx {
       const shouldSample = Math.random() < this.config.sampleRate;
 
       if (!shouldSample) {
+        // Provide a no-op next() for API compatibility, but the actual
+        // return value comes from fn itself, not from next().
         const next = () => Promise.resolve(input as T);
-        return fn(input, next);
+        return fn(input, next).catch(err => {
+          // Re-throw to maintain error behavior even when not sampling
+          throw err;
+        });
       }
 
       const start = Date.now();
