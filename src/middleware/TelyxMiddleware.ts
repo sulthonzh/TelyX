@@ -99,11 +99,13 @@ export class TelyxMiddleware {
         };
       }
 
-      next();
     } catch (error) {
       console.error('[Telyx] Middleware error:', error);
-      next();
     }
+    // Call next() exactly once, outside the try-catch. Previously next() was
+    // the last line inside try, and the catch also called next() — so if
+    // next() itself threw, the catch would double-dispatch the request.
+    next();
   };
 
   /**

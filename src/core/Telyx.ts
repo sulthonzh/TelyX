@@ -603,7 +603,14 @@ export class Telyx {
    */
   private startFlushTimer(): void {
     this.flushTimer = setInterval(() => {
-      this.flush();
+      // Catch rejections so an unexpected error in _flushInternal doesn't
+      // crash the process via unhandledRejection. checkBatchSize() already
+      // does this; the timer must too.
+      this.flush().catch(err => {
+        if (this.config.enableConsole) {
+          console.error('[Telyx] Unexpected flush error in timer:', err);
+        }
+      });
     }, this.config.flushInterval);
     // Don't keep the process alive just for the flush timer.
     if (this.flushTimer && typeof this.flushTimer === 'object' && 'unref' in this.flushTimer) {
