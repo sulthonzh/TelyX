@@ -675,3 +675,43 @@ describe('Telyx sanitizeInput branches', () => {
     t.destroy();
   });
 });
+
+describe('Telyx recordSuccess/recordFailure duration validation', () => {
+  it('recordSuccess rejects NaN duration', () => {
+    const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });
+    assert.throws(() => {
+      t.recordSuccess('method', NaN);
+    }, /finite non-negative number/);
+    t.destroy();
+  });
+
+  it('recordSuccess rejects Infinity duration', () => {
+    const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });
+    assert.throws(() => {
+      t.recordSuccess('method', Infinity);
+    }, /finite non-negative number/);
+    t.destroy();
+  });
+
+  it('recordFailure rejects NaN duration', () => {
+    const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });
+    assert.throws(() => {
+      t.recordFailure('method', NaN);
+    }, /finite non-negative number/);
+    t.destroy();
+  });
+
+  it('recordFailure rejects Infinity duration', () => {
+    const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });
+    assert.throws(() => {
+      t.recordFailure('method', Infinity);
+    }, /finite non-negative number/);
+    t.destroy();
+  });
+
+  it('recordSuccess accepts duration of 0', () => {
+    const t = new Telyx({ agentName: 'test', environment: 'test', enableConsole: false });
+    t.recordSuccess('method', 0);
+    t.destroy();
+  });
+});

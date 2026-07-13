@@ -153,7 +153,7 @@ describe('Telyx Input Validation', () => {
     
     // Invalid calls should throw
     assert.throws(() => t.recordSuccess('', 100), /methodName must be a non-empty string/);
-    assert.throws(() => t.recordSuccess('method', -1), /duration must be a non-negative number/);
+    assert.throws(() => t.recordSuccess('method', -1), /duration must be a finite non-negative number/);
   });
 
   it('validates recordError parameters', () => {

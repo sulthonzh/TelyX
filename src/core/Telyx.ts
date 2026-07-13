@@ -215,8 +215,11 @@ export class Telyx {
       throw new Error('methodName must be a non-empty string');
     }
     
-    if (typeof duration !== 'number' || duration < 0) {
-      throw new Error('duration must be a non-negative number');
+    // Number.isFinite() rejects NaN, Infinity, and -Infinity — all of which
+    // would corrupt analytics (averages become NaN/Infinity, anomaly thresholds
+    // break). recordMetric() already uses !isFinite(); this matches that pattern.
+    if (typeof duration !== 'number' || !Number.isFinite(duration) || duration < 0) {
+      throw new Error('duration must be a finite non-negative number');
     }
     
     if (metadata && typeof metadata !== 'object') {
@@ -251,8 +254,8 @@ export class Telyx {
       throw new Error('methodName must be a non-empty string');
     }
 
-    if (typeof duration !== 'number' || duration < 0) {
-      throw new Error('duration must be a non-negative number');
+    if (typeof duration !== 'number' || !Number.isFinite(duration) || duration < 0) {
+      throw new Error('duration must be a finite non-negative number');
     }
 
     if (metadata && typeof metadata !== 'object') {
