@@ -301,6 +301,10 @@ export class Telyx {
     // corresponding error details. recordSuccess and recordFailure are
     // also unsampled for the same reason.
     
+    // Spread metadata FIRST, then set method — ensures the actual methodName
+    // always takes precedence. Without this, a caller passing { method: 'x' }
+    // in metadata would silently override the real method name, causing wrong
+    // error attribution in getErrorAnalysis() and anomaly detection.
     const errorEvent: TelyxError = {
       timestamp: new Date().toISOString(),
       agent: this.config.agentName,
@@ -308,8 +312,8 @@ export class Telyx {
       error: (error as Error)?.message || 'Unknown error',
       stack: (error as Error)?.stack,
       context: {
-        method: methodName,
         ...(metadata as Record<string, unknown>),
+        method: methodName,
       },
     };
 
