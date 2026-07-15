@@ -66,15 +66,18 @@ export class TelyxAnalytics {
       };
     }
 
-    const durations = methodEvents.map(event => event.duration!);
+    const durations = methodEvents
+      .map(event => event.duration!)
+      .filter((duration): duration is number => duration !== undefined && duration !== null && !Number.isNaN(duration));
+
     const successfulCalls = methodEvents.filter(event => event.success).length;
     const failedCalls = methodEvents.filter(event => !event.success).length;
 
     return {
-      averageDuration: durations.reduce((sum, duration) => sum + duration, 0) / durations.length,
-      minDuration: durations.reduce((min, d) => (d < min ? d : min), durations[0]),
-      maxDuration: durations.reduce((max, d) => (d > max ? d : max), durations[0]),
-      successRate: successfulCalls / methodEvents.length,
+      averageDuration: durations.length > 0 ? durations.reduce((sum, duration) => sum + duration, 0) / durations.length : 0,
+      minDuration: durations.length > 0 ? durations.reduce((min, d) => (d < min ? d : min), durations[0]) : 0,
+      maxDuration: durations.length > 0 ? durations.reduce((max, d) => (d > max ? d : max), durations[0]) : 0,
+      successRate: methodEvents.length > 0 ? successfulCalls / methodEvents.length : 0,
       totalCalls: methodEvents.length,
       successfulCalls,
       failedCalls,
@@ -592,6 +595,8 @@ export class TelyxAnalytics {
     if (this.events.length === 0) return 0;
 
     const timestamps = this.events.map(event => new Date(event.timestamp).getTime());
+    if (timestamps.length === 0) return 0;
+    
     const minTime = timestamps.reduce((min, t) => (t < min ? t : min), timestamps[0]);
     const maxTime = timestamps.reduce((max, t) => (t > max ? t : max), timestamps[0]);
     
