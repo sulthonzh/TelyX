@@ -136,8 +136,11 @@ export class TelyxMiddleware {
             const affectedRows = resultObj?.affectedRows as number | undefined;
             const rowCount = resultObj?.rowCount as number | undefined;
             
-            const rowsAffected = typeof affectedRows === 'number' ? affectedRows : 
-                               typeof rowCount === 'number' ? rowCount : 0;
+            // Validate with Number.isFinite() — typeof NaN === 'number' is true,
+            // so NaN/Infinity would pass a plain typeof check and propagate to
+            // analytics, corrupting aggregate calculations.
+            const rowsAffected = (typeof affectedRows === 'number' && Number.isFinite(affectedRows)) ? affectedRows : 
+                               (typeof rowCount === 'number' && Number.isFinite(rowCount)) ? rowCount : 0;
             
             this.telyx.recordSuccess('database_query', duration, {
               query: this.sanitizeQuery(query),
