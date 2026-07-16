@@ -257,7 +257,12 @@ export class TelyxMiddleware {
 
               let tokensUsed = 0;
               if (usage && typeof usage === 'object' && 'total_tokens' in usage && typeof (usage as Record<string, unknown>).total_tokens === 'number') {
-                tokensUsed = Math.max(0, (usage as Record<string, unknown>).total_tokens as number);
+                const rawTokens = (usage as Record<string, unknown>).total_tokens as number;
+                // Validate: reject NaN, Infinity, negative values. These corrupt
+                // analytics (averages become NaN/Infinity, usage totals wrong).
+                if (Number.isFinite(rawTokens) && rawTokens >= 0) {
+                  tokensUsed = rawTokens;
+                }
               }
 
               const responseLength = typeof content === 'string' ? content.length : 0;
