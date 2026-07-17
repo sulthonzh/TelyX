@@ -23,6 +23,10 @@ export class TelyxMiddleware {
         throw new Error('Invalid request object');
       }
       
+      if (typeof req.get !== 'function') {
+        throw new Error('req.get must be a function');
+      }
+      
       const sanitizedHeaders = this.sanitizeHeaders(req.headers || {});
 
       const start = Date.now();
@@ -259,7 +263,7 @@ export class TelyxMiddleware {
               const content = responseObj?.content;
 
               let tokensUsed = 0;
-              if (usage && typeof usage === 'object' && 'total_tokens' in usage && typeof (usage as Record<string, unknown>).total_tokens === 'number') {
+              if (usage && typeof usage === 'object' && !Array.isArray(usage) && 'total_tokens' in usage && typeof (usage as Record<string, unknown>).total_tokens === 'number') {
                 const rawTokens = (usage as Record<string, unknown>).total_tokens as number;
                 // Validate: reject NaN, Infinity, negative values. These corrupt
                 // analytics (averages become NaN/Infinity, usage totals wrong).

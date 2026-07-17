@@ -16,6 +16,27 @@ export class TelyxAnalytics {
    * Add events from telemetry batch
    */
   public addEvents(events: TelyxEvent[]): void {
+    // Validate input: ensure it's an array and each item is a valid event object.
+    // Without this, corrupted data (null, undefined, wrong types) would break
+    // analytics calculations (reduce, filter, map operations would crash).
+    if (!Array.isArray(events)) {
+      throw new Error('events must be an array');
+    }
+    
+    for (const event of events) {
+      if (!event || typeof event !== 'object' || Array.isArray(event)) {
+        throw new Error('events array must contain objects only');
+      }
+      
+      if (typeof event.timestamp !== 'string' || event.timestamp.trim() === '') {
+        throw new Error('each event must have a non-empty timestamp string');
+      }
+      
+      if (typeof event.event !== 'string' || event.event.trim() === '') {
+        throw new Error('each event must have a non-empty event string');
+      }
+    }
+    
     // Use concat instead of push(...events) to avoid RangeError
     // (Maximum call stack size exceeded) when events is very large.
     this.events = this.events.concat(events);
@@ -26,6 +47,30 @@ export class TelyxAnalytics {
    * Add metrics from telemetry batch
    */
   public addMetrics(metrics: TelyxMetric[]): void {
+    // Validate input: ensure it's an array and each item is a valid metric object.
+    // Without this, corrupted data would break analytics calculations.
+    if (!Array.isArray(metrics)) {
+      throw new Error('metrics must be an array');
+    }
+    
+    for (const metric of metrics) {
+      if (!metric || typeof metric !== 'object' || Array.isArray(metric)) {
+        throw new Error('metrics array must contain objects only');
+      }
+      
+      if (typeof metric.timestamp !== 'string' || metric.timestamp.trim() === '') {
+        throw new Error('each metric must have a non-empty timestamp string');
+      }
+      
+      if (typeof metric.metric !== 'string' || metric.metric.trim() === '') {
+        throw new Error('each metric must have a non-empty metric string');
+      }
+      
+      if (typeof metric.value !== 'number' || !Number.isFinite(metric.value)) {
+        throw new Error('each metric must have a finite number value');
+      }
+    }
+    
     this.metrics = this.metrics.concat(metrics);
     this.cleanupData();
   }
@@ -34,6 +79,30 @@ export class TelyxAnalytics {
    * Add errors from telemetry batch
    */
   public addErrors(errors: TelyxError[]): void {
+    // Validate input: ensure it's an array and each item is a valid error object.
+    // Without this, corrupted data would break analytics calculations.
+    if (!Array.isArray(errors)) {
+      throw new Error('errors must be an array');
+    }
+    
+    for (const error of errors) {
+      if (!error || typeof error !== 'object' || Array.isArray(error)) {
+        throw new Error('errors array must contain objects only');
+      }
+      
+      if (typeof error.timestamp !== 'string' || error.timestamp.trim() === '') {
+        throw new Error('each error must have a non-empty timestamp string');
+      }
+      
+      if (typeof error.error !== 'string' || error.error.trim() === '') {
+        throw new Error('each error must have a non-empty error string');
+      }
+      
+      if (!error.context || typeof error.context !== 'object' || Array.isArray(error.context)) {
+        throw new Error('each error must have an object context');
+      }
+    }
+    
     this.errors = this.errors.concat(errors);
     this.cleanupData();
   }

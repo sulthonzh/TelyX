@@ -177,8 +177,8 @@ describe('TelyxAnalytics', () => {
   it('clear removes all data', () => {
     const a = new TelyxAnalytics();
     a.addEvents([makeEvent()]);
-    a.addMetrics([{ timestamp: '', agent: '', environment: '', metric: 'x', value: 1 }]);
-    a.addErrors([{ timestamp: '', agent: '', environment: '', error: 'err' }]);
+    a.addMetrics([{ timestamp: new Date().toISOString(), agent: 'test', environment: 'test', metric: 'x', value: 1 }]);
+    a.addErrors([{ timestamp: new Date().toISOString(), agent: 'test', environment: 'test', error: 'err', context: {} }]);
     a.clear();
     assert.equal(a.getMethodPerformance('fetchData').totalCalls, 0);
     assert.equal(a.getSystemHealth().totalCalls, 0);
