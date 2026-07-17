@@ -586,6 +586,12 @@ export class Telyx {
       });
 
       if (!res.ok) {
+        // Consume the response body to release the underlying connection
+        // back to the pool. In Node.js (undici), not reading the body leaks
+        // the socket — under sustained error responses (e.g., server returning
+        // 500s during an outage), this exhausts the connection pool and
+        // prevents any new requests from going out.
+        try { await res.body?.cancel(); } catch { /* best effort */ }
         throw new Error(`Telemetry POST failed: ${res.status} ${res.statusText}`);
       }
     } finally {
