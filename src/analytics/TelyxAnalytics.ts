@@ -135,9 +135,12 @@ export class TelyxAnalytics {
       };
     }
 
+    // Use Number.isFinite() for consistency — it rejects undefined, null,
+    // NaN, Infinity, and -Infinity in a single check, matching the pattern
+    // used in recordSuccess/recordMetric.
     const durations = methodEvents
       .map(event => event.duration!)
-      .filter((duration): duration is number => duration !== undefined && duration !== null && !Number.isNaN(duration));
+      .filter((duration): duration is number => typeof duration === 'number' && Number.isFinite(duration));
 
     const successfulCalls = methodEvents.filter(event => event.success).length;
     const failedCalls = methodEvents.filter(event => !event.success).length;
@@ -175,8 +178,13 @@ export class TelyxAnalytics {
     // producing misleading system health metrics.
     const ratedEvents = successfulEvents + failedEvents;
 
-    // Calculate average response time from all method calls
-    const methodEvents = this.events.filter(event => event.duration !== undefined);
+    // Calculate average response time from all method calls.
+    // Filter for finite durations only — NaN/Infinity pass `!== undefined`
+    // and would corrupt the sum (NaN propagates, Infinity skews the average).
+    // Events can enter via addEvents() which doesn't validate duration finiteness.
+    const methodEvents = this.events.filter(
+      event => typeof event.duration === 'number' && Number.isFinite(event.duration)
+    );
     const averageResponseTime = methodEvents.length > 0
       ? methodEvents.reduce((sum, event) => sum + event.duration!, 0) / methodEvents.length
       : 0;
@@ -304,17 +312,24 @@ export class TelyxAnalytics {
     const slowResponseMethods: { method: string; avgDuration: number; threshold: number }[] = [];
     const suddenTrafficSpikes: { timestamp: string; requestCount: number; threshold: number }[] = [];
     
-    const methodStats: Record<string, { totalCalls: number; errors: number; totalTime: number }> = {};    
+    // Track durationCount separately from totalCalls. totalCalls counts ALL
+    // events with a method field (for error rate), but only events with valid
+    // finite durations should contribute to the average. Without this, events
+    // that have method but no duration inflate the denominator, producing
+    // underestimated averages.
+    const methodStats: Record<string, { totalCalls: number; errors: number; totalTime: number; durationCount: number }> = {};
     for (const event of this.events) {
       if (!event.method) continue;
       
-      const stats = methodStats[event.method] || { totalCalls: 0, errors: 0, totalTime: 0 };
+      const stats = methodStats[event.method] || { totalCalls: 0, errors: 0, totalTime: 0, durationCount: 0 };
       stats.totalCalls++;
       if (event.success === false) {
         stats.errors++;
       }
-      if (event.duration !== undefined && event.duration !== null) {
+      // Only sum finite durations — NaN/Infinity would corrupt totalTime.
+      if (typeof event.duration === 'number' && Number.isFinite(event.duration)) {
         stats.totalTime += event.duration;
+        stats.durationCount++;
       }
       methodStats[event.method] = stats;
     }
@@ -331,7 +346,8 @@ export class TelyxAnalytics {
         });
       }
       
-      const avgDuration = stats.totalTime / stats.totalCalls;
+      // Average over events that had a valid duration, not all method events.
+      const avgDuration = stats.durationCount > 0 ? stats.totalTime / stats.durationCount : 0;
       if (avgDuration > 2000) {
         slowResponseMethods.push({
           method,
