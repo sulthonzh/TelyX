@@ -92,7 +92,7 @@ describe('TelyxAnalytics cleanupData() retention limits', () => {
 
     for (let i = 0; i < 20; i++) {
       analytics.addMetrics([
-        { timestamp: new Date().toISOString(), name: 'test', value: i },
+        { timestamp: new Date().toISOString(), metric: 'test', value: i },
       ]);
     }
 
@@ -126,7 +126,7 @@ describe('TelyxAnalytics cleanupData() retention limits', () => {
     const analytics = new TelyxAnalytics(100, 7 * 24 * 60 * 60 * 1000);
 
     analytics.addMetrics([
-      { timestamp: new Date().toISOString(), name: 'test', value: 42 },
+      { timestamp: new Date().toISOString(), metric: 'test', value: 42 },
     ]);
 
     assert.equal(analytics.getSummary().totalMetrics, 1);
