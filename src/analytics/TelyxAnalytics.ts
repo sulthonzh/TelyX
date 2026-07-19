@@ -284,7 +284,11 @@ export class TelyxAnalytics {
       modelUsage[model] = (modelUsage[model] || 0) + 1;
 
       // Only success events carry tokensUsed in their metadata.
-      if (event.success && typeof meta.tokensUsed === 'number') {
+      // Use Number.isFinite() — typeof NaN === 'number' is true, so NaN/Infinity
+      // would pass a plain typeof check and corrupt totalTokens (NaN propagates
+      // through addition, making the entire sum NaN). Events from addEvents()
+      // bypass the finiteness validation in aiCallMiddleware.
+      if (event.success && typeof meta.tokensUsed === 'number' && Number.isFinite(meta.tokensUsed)) {
         totalTokens += meta.tokensUsed;
       }
     });
