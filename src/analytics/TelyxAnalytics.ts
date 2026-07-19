@@ -448,7 +448,9 @@ export class TelyxAnalytics {
           buckets[index].errors++;
         }
 
-        if (event.duration !== null && event.duration !== undefined) {
+        // Only sum finite durations — NaN/Infinity from addEvents() would
+        // corrupt totalDuration and propagate to averageResponseTimePerHour.
+        if (typeof event.duration === 'number' && Number.isFinite(event.duration)) {
           buckets[index].totalDuration += event.duration;
         }
       }
@@ -474,7 +476,7 @@ export class TelyxAnalytics {
         if (event.success === true || event.success === false) {
           ratedPerBucket[index]++;
         }
-        if (event.duration !== null && event.duration !== undefined) {
+        if (typeof event.duration === 'number' && Number.isFinite(event.duration)) {
           timedPerBucket[index]++;
         }
       }
@@ -516,23 +518,35 @@ export class TelyxAnalytics {
     // Only events with explicit success/failure belong in rate denominators.
     // Custom events (recordEvent) have no success field and would skew the rates.
     const ratedEvents = successful + failed;
-    const withDuration = this.events.filter(e => e.duration !== undefined);
+    // Use Number.isFinite() for consistency with getMethodPerformance(),
+    // getSystemHealth(), and detectAnomalies(). Events from addEvents() are
+    // not validated for duration finiteness — NaN/Infinity would corrupt
+    // the sum and produce a NaN average.
+    const withDuration = this.events.filter(
+      e => typeof e.duration === 'number' && Number.isFinite(e.duration)
+    );
 
     const avgResponseTime = withDuration.length > 0
       ? withDuration.reduce((s, e) => s + e.duration!, 0) / withDuration.length
       : 0;
 
-    const methodCounts: Record<string, { calls: number; totalDuration: number }> = {};
+    // Track durationCount separately — dividing totalDuration by ALL calls
+    // (including ones without a valid duration) underestimates the average.
+    // This matches the pattern in detectAnomalies().
+    const methodCounts: Record<string, { calls: number; totalDuration: number; durationCount: number }> = {};
     for (const e of this.events) {
       if (!e.method) continue;
-      if (!methodCounts[e.method]) methodCounts[e.method] = { calls: 0, totalDuration: 0 };
+      if (!methodCounts[e.method]) methodCounts[e.method] = { calls: 0, totalDuration: 0, durationCount: 0 };
       methodCounts[e.method].calls++;
-      if (e.duration !== undefined) methodCounts[e.method].totalDuration += e.duration;
+      if (typeof e.duration === 'number' && Number.isFinite(e.duration)) {
+        methodCounts[e.method].totalDuration += e.duration;
+        methodCounts[e.method].durationCount++;
+      }
     }
     const topMethods = Object.entries(methodCounts)
       .sort((a, b) => b[1].calls - a[1].calls)
       .slice(0, 10)
-      .map(([method, d]) => ({ method, calls: d.calls, avgDuration: d.calls > 0 ? d.totalDuration / d.calls : 0 }));
+      .map(([method, d]) => ({ method, calls: d.calls, avgDuration: d.durationCount > 0 ? d.totalDuration / d.durationCount : 0 }));
 
     return {
       totalEvents,
