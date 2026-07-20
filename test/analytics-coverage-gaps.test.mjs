@@ -199,6 +199,6 @@ describe('TelyxAnalytics getSummary() with anomalies', () => {
 
     const summary = analytics.getSummary();
     assert.equal(summary.topMethods.length, 1);
-    assert.equal(summary.topMethods[0].avgDuration, 100); // Should compute avg of defined durations only
+    assert.equal(summary.topMethods[0].avgDuration, 200); // Avg of defined durations only: only 1 event has duration=200
   });
 });
