@@ -14,13 +14,14 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "pretest": "npm run build",
     "test": "node --test test/telyx.test.mjs test/anomaly-detection.test.mjs test/branch-coverage.test.mjs test/analytics-coverage-gaps.test.mjs test/coverage-gaps-3.test.mjs",
     "test:watch": "node --test --watch test/telyx.test.mjs test/anomaly-detection.test.mjs test/branch-coverage.test.mjs test/analytics-coverage-gaps.test.mjs test/coverage-gaps-3.test.mjs",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build && npm test && npm run lint",
     "example": "node examples/basic-usage.js",
     "lint": "eslint src/",
-    "test:coverage": "c8 node --test test/telyx.test.mjs test/anomaly-detection.test.mjs"
+    "test:coverage": "c8 node --test test/telyx.test.mjs test/anomaly-detection.test.mjs test/branch-coverage.test.mjs test/analytics-coverage-gaps.test.mjs test/coverage-gaps-3.test.mjs"
   },
   "keywords": [
     "telemetry",
