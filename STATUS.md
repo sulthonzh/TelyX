@@ -1,15 +1,15 @@
 # TelyX — Exceptional Checklist Audit
 
-**Audited:** 2026-07-21 (UTC 2026-07-20 22:47)
-**Version:** 1.75.0
+**Audited:** 2026-07-30 (UTC 2026-07-30 03:55)
+**Version:** 1.85.0
 **Status:** ✅ EXCEPTIONAL
 
 ## Checklist
 
 - [x] **README hooks reader in first 3 lines** — "Lightweight telemetry for AI agents — zero dependencies, native `fetch`, plug-and-play observability for LLM-powered apps."
 - [x] **Quick start works in <2 minutes** — `npm install telyx` + 5-line config, zero infra required
-- [x] **All tests GREEN (100% pass rate)** — 203/203 tests pass across 39 suites
-- [x] **Test coverage >= 80% on core logic** — 91.92% stmts, 90.30% branches, 100% funcs
+- [x] **All tests GREEN (100% pass rate)** — 235/235 tests pass across 39+ suites
+- [x] **Test coverage >= 80% on core logic** — 95.73% stmts, 91.75% branches, 96.36% funcs
 - [x] **Zero TypeScript errors (strict mode)** — `npx tsc` exits 0
 - [x] **Zero ESLint warnings** — `npx eslint 'src/**/*.ts'` exits 0
 - [x] **No TODO/FIXME comments in shipped code** — grep confirms none in `src/`
@@ -24,40 +24,48 @@
 
 | File | % Stmts | % Branch | % Funcs |
 |------|---------|----------|---------|
-| All files | 91.92 | 90.30 | 100 |
+| All files | 95.73 | 91.75 | 96.36 |
 | src/index.ts | 100 | 100 | 100 |
-| src/core/Telyx.ts | 82.07 | 86.75 | 100 |
+| src/core/Telyx.ts | 91.89 | 91.01 | 90.9 |
 | src/middleware/TelyxMiddleware.ts | 96.64 | 92.30 | 100 |
-| src/analytics/TelyxAnalytics.ts | 98.69 | 91.86 | 100 |
+| src/analytics/TelyxAnalytics.ts | 98.72 | 91.98 | 100 |
 | src/types/index.ts | 100 | 100 | 100 |
 
-## Fixes Applied This Audit (2026-07-21)
+## Fixes Applied This Audit (2026-07-30)
 
-1. **Branch coverage 86.41% → 90.30% (+8.01%)** — Added 70 coverage-gap tests in `test/coverage-gaps-3.test.mjs`:
-   - **TelyxAnalytics input validation** (addEvents/addMetrics/addErrors): non-array, non-object, missing/empty fields, non-finite values, invalid context — ~30 tests covering all validation throw branches
-   - **detectAnomalies**: empty data, high error rate detection, slow response detection, 5% boundary threshold, fast method exclusion, no-duration event handling
-   - **getTimeSeriesData**: 1h/24h/7d bucket counts, event placement verification, default range
-   - **getSystemHealth**: empty analytics, rated event exclusion, uptime calculation, method performance
-   - **getErrorAnalysis**: unknown method attribution, error type parsing with/without colon, error rate calculation, recent errors cap
-   - **getUsageMetrics**: multi-provider/model tracking, missing tokens, average per call
-   - **getMethodPerformance**: unknown method, min/max/avg, failures, NaN duration filter
-   - **cleanupData**: maxHistoryAgeMs=0 skips age filter, retention truncation, error cap
-   - **Telyx config validation**: flushInterval <1000ms, non-boolean enableConsole, non-positive maxAnalyticsRetention, negative maxHistoryAgeMs, endpoint type/empty/URL validation
-   - **TelyxMiddleware**: sanitizeCacheKey non-string conversion, auth/credential/password pattern redaction
+1. **Telyx.ts coverage 82.07%→91.89% stmts (+9.82pp), 86.75%→91.01% branches (+4.26pp)** — Added 32 tests in `test/coverage-gaps-4.test.mjs`:
+   - **trackMethod** (4 tests): sampled success/failure recording, non-sampled success/throw paths
+   - **enableConsole logging** (5 tests): recordEvent/Metric/Success/Failure/Error console output branches
+   - **track() proxy** (7 tests): sampled success/failure, non-sampled, sync throw rejection, property/symbol passthrough
+   - **flush/postBatch** (6 tests): HTTP server integration with 200/500 status paths, console logging on success/error
+   - **destroy()** (3 tests): pending flush await, timer cleanup, 500 error handling
+   - **sanitizeInput** (5 tests): null/undefined/object/primitive edge cases
+   - **checkBatchSize** (1 test): auto-flush trigger when batch exceeds maxBatchSize
+   - **registerShutdownHandler** (1 test): handler registration and removal lifecycle
 
-2. **TelyxAnalytics.ts branches: 77.01% → 91.86% (+14.85%)** — Input validation branches were the largest gap
-3. **TelyxMiddleware.ts branches: ~80% → 92.30%** — Cache key sanitization branches covered
+2. **ESLint fix**: TelyxMiddleware.ts line 190 `result != null` → `result !== null && result !== undefined` (eqeqeq rule)
 
-## Previous Audit Fixes (2026-07-18)
+## Previous Audit Fixes (2026-07-21)
 
-1. **NaN sampleRate accepted** — `NaN < 0` and `NaN > 1` both evaluate to `false`, so NaN passed validation. Added `Number.isNaN()` check.
-2. **Branch coverage 73.53% → 86.41%** — Added 63 branch coverage tests across TelyxMiddleware and Telyx core.
-3. **ESLint `no-this-alias` error** — Fixed `const self = this` to use arrow functions in Telyx.ts.
-4. **Analytics coverage gaps** — 15 tests in analytics-coverage-gaps.test.mjs.
+1. **Branch coverage 86.41% → 90.30%** — Added 70 coverage-gap tests in `test/coverage-gaps-3.test.mjs` covering TelyxAnalytics validation, detectAnomalies, getTimeSeriesData, getSystemHealth, getErrorAnalysis, getUsageMetrics, getMethodPerformance, cleanupData, Telyx config validation, TelyxMiddleware cache key sanitization.
+
+## Remaining Uncovered Lines
+
+- **Telyx.ts lines 612-614, 624-631**: `destroy()` defensive catch blocks — unreachable because `_flushInternal()` catches all errors internally via its own try/catch, so `_flushPromise` never rejects
+- **Telyx.ts lines 647-650**: `registerShutdownHandler()` body — `process.on('beforeExit')` cannot be emitted in test without side effects
+- **Telyx.ts lines 667-670**: `sanitizeInput()` object branch — c8/V8 instrumentation limitation (code is reached but branch not tracked)
+
+## Test History
+
+| Date | Tests | Added | Stmts % | Branches % | Notes |
+|------|-------|-------|---------|------------|-------|
+| 2026-07-18 | 133 | +63 | ~88 | 86.41% | Initial branch coverage push |
+| 2026-07-21 | 203 | +70 | 91.92 | 90.30 | TelyxAnalytics validation + analytics methods |
+| 2026-07-30 | 235 | +32 | 95.73 | 91.75 | Telyx.ts internals: trackMethod, track(), flush, destroy, sanitize |
 
 ## Test Summary
 
-- **Total tests:** 203 (43 original + 63 branch coverage + 15 analytics gaps + 12 anomaly detection + 70 coverage-gaps-3)
-- **Suites:** 39
+- **Total tests:** 235 (43 original + 63 branch coverage + 15 analytics gaps + 12 anomaly detection + 70 coverage-gaps-3 + 32 coverage-gaps-4)
+- **Suites:** 39+
 - **Pass rate:** 100%
-- **Runtime:** ~2s
+- **Runtime:** ~4s
