@@ -187,7 +187,7 @@ export class TelyxMiddleware {
               // Use loose null check so both null and undefined register as cache
               // misses. Many cache backends (Redis, Memcached) return null for
               // missing keys — strict !== undefined would treat those as hits.
-              hit: result != null,
+              hit: result !== null && result !== undefined,
             });
           }
         } catch (error) {
