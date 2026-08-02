@@ -1,15 +1,24 @@
 # TelyX — Exceptional Checklist Audit
 
-**Audited:** 2026-07-30 (UTC 2026-07-30 03:55)
+**Audited:** 2026-08-02 (UTC 2026-08-02 06:45)
 **Version:** 1.85.0
 **Status:** ✅ EXCEPTIONAL
+
+## Re-Audit 2026-08-02
+
+Added 8 tests in `test/coverage-gaps-5.test.mjs`:
+1. **toMarkdown suddenTrafficSpikes section** (2 tests) — Renders traffic spike section with 10-minute bucket data (5 sparse + 1 dense bucket → avg*3 threshold exceeded), and renders all three anomaly types together (highErrorRate + slowResponse + suddenTrafficSpikes).
+2. **Middleware catch block coverage** (6 tests) — httpRequestMiddleware res.send tracking error catch, httpRequestMiddleware res.end tracking error catch, databaseQueryMiddleware tracking error catch, cacheOperationMiddleware tracking error catch, aiCallMiddleware end() tracking error catch, aiCallMiddleware initialization error catch (returns no-op middleware).
+
+**Coverage:** Stmts 95.73%→**96.81%** (+1.08pp), Branches 91.77%→**93.27%** (+1.50pp). TelyxAnalytics.ts: stmts 98.72%→**100%**. TelyxMiddleware.ts: stmts 96.64%→**99.48%**, branches 92.39%→**98.92%**.
+**Tests:** 235→**243** (+8), all GREEN ✅.
 
 ## Checklist
 
 - [x] **README hooks reader in first 3 lines** — "Lightweight telemetry for AI agents — zero dependencies, native `fetch`, plug-and-play observability for LLM-powered apps."
 - [x] **Quick start works in <2 minutes** — `npm install telyx` + 5-line config, zero infra required
-- [x] **All tests GREEN (100% pass rate)** — 235/235 tests pass across 39+ suites
-- [x] **Test coverage >= 80% on core logic** — 95.73% stmts, 91.75% branches, 96.36% funcs
+- [x] **All tests GREEN (100% pass rate)** — 243/243 tests pass across 49+ suites
+- [x] **Test coverage >= 80% on core logic** — 96.81% stmts, 93.27% branches, 96.36% funcs
 - [x] **Zero TypeScript errors (strict mode)** — `npx tsc` exits 0
 - [x] **Zero ESLint warnings** — `npx eslint 'src/**/*.ts'` exits 0
 - [x] **No TODO/FIXME comments in shipped code** — grep confirms none in `src/`
@@ -24,11 +33,11 @@
 
 | File | % Stmts | % Branch | % Funcs |
 |------|---------|----------|---------|
-| All files | 95.73 | 91.75 | 96.36 |
+| All files | 96.81 | 93.27 | 96.36 |
 | src/index.ts | 100 | 100 | 100 |
-| src/core/Telyx.ts | 91.89 | 91.01 | 90.9 |
-| src/middleware/TelyxMiddleware.ts | 96.64 | 92.30 | 100 |
-| src/analytics/TelyxAnalytics.ts | 98.72 | 91.98 | 100 |
+| src/core/Telyx.ts | 91.89 | 91.07 | 90.9 |
+| src/middleware/TelyxMiddleware.ts | 99.48 | 98.92 | 100 |
+| src/analytics/TelyxAnalytics.ts | 100 | 92.45 | 100 |
 | src/types/index.ts | 100 | 100 | 100 |
 
 ## Fixes Applied This Audit (2026-07-30)
@@ -62,10 +71,11 @@
 | 2026-07-18 | 133 | +63 | ~88 | 86.41% | Initial branch coverage push |
 | 2026-07-21 | 203 | +70 | 91.92 | 90.30 | TelyxAnalytics validation + analytics methods |
 | 2026-07-30 | 235 | +32 | 95.73 | 91.75 | Telyx.ts internals: trackMethod, track(), flush, destroy, sanitize |
+| 2026-08-02 | 243 | +8 | 96.81 | 93.27 | Cycle 7: toMarkdown suddenTrafficSpikes, middleware catch blocks |
 
 ## Test Summary
 
-- **Total tests:** 235 (43 original + 63 branch coverage + 15 analytics gaps + 12 anomaly detection + 70 coverage-gaps-3 + 32 coverage-gaps-4)
+- **Total tests:** 243 (43 original + 63 branch coverage + 15 analytics gaps + 12 anomaly detection + 70 coverage-gaps-3 + 32 coverage-gaps-4 + 8 coverage-gaps-5)
 - **Suites:** 39+
 - **Pass rate:** 100%
 - **Runtime:** ~4s
