@@ -30,7 +30,7 @@ function startServer(server) {
 describe('Telyx trackMethod coverage gaps', () => {
   it('trackMethod records success on sampled path', async () => {
     const t = new Telyx({ agentName: 'test', environment: 'test', sampleRate: 1, enableConsole: false });
-    const fn = t.trackMethod('compute', async (input, next) => 'result');
+    const fn = t.trackMethod('compute', async (_input, _next) => 'result');
     const result = await fn('input');
     assert.equal(result, 'result');
     const batch = t.getBatch();
@@ -50,7 +50,7 @@ describe('Telyx trackMethod coverage gaps', () => {
 
   it('trackMethod non-sampled path still executes fn', async () => {
     const t = new Telyx({ agentName: 'test', environment: 'test', sampleRate: 0, enableConsole: false });
-    const fn = t.trackMethod('ok', async (input) => 'non-sampled-result');
+    const fn = t.trackMethod('ok', async (_input) => 'non-sampled-result');
     const result = await fn('data');
     assert.equal(result, 'non-sampled-result');
     assert.equal(t.getBatch().events.filter(e => e.event === 'method_success').length, 0);

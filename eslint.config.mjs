@@ -35,6 +35,18 @@ export default [
     },
   },
   {
-    ignores: ['dist/', 'node_modules/', 'coverage/', 'examples/', 'src/**/*.test.ts'],
+    files: ['test/**/*.mjs', 'test/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  {
+    ignores: ['dist/', 'node_modules/', 'coverage/', 'examples/', 'frontend/', 'src/**/*.test.ts'],
   },
 ];

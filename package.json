@@ -1,7 +1,7 @@
 {
   "name": "telyx",
   "version": "1.104.12",
-  "description": "Lightweight telemetry for AI agents — zero dependencies, native fetch, plug-and-play observability for LLM-powered apps",
+  "description": "Lightweight telemetry for AI agents \u2014 zero dependencies, native fetch, plug-and-play observability for LLM-powered apps",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -57,7 +57,7 @@
     "c8": "^12.0.0",
     "eslint": "^10.0.0",
     "globals": "^17.0.0",
-    "typescript": "^7.0.0",
+    "typescript": "^6.0.0",
     "typescript-eslint": "^8.18.0"
   },
   "engines": {

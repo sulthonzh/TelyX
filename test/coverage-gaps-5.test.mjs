@@ -160,11 +160,10 @@ describe('TelyxMiddleware error catch blocks', () => {
       get: () => undefined,
       headers: {},
     };
-    let endArg = null;
     const res = {
       statusCode: 200,
       send: function() {},
-      end: function(chunk) { endArg = chunk; },
+      end: function() {},
     };
 
     middleware.httpRequestMiddleware(req, res, () => {});

@@ -100,7 +100,7 @@ describe('TelyxMiddleware httpRequestMiddleware branches', () => {
     // Simulate Express: res.send() calls res.end() internally
     const res = {
       statusCode: 200,
-      send: function(body) { this.end(); return this; },
+      send: function(_body) { this.end(); return this; },
       end: function() { return this; },
     };
     mw.httpRequestMiddleware({ method: 'POST', url: '/api', get: () => '', headers: {} }, res, () => {});

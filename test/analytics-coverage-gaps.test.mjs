@@ -1,6 +1,5 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { Telyx } from '../dist/index.js';
 import { TelyxAnalytics } from '../dist/analytics/TelyxAnalytics.js';
 
 describe('TelyxAnalytics toMarkdown() anomaly sections', () => {

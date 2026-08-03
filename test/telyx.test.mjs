@@ -208,7 +208,7 @@ describe('TelyxMiddleware', () => {
     const mw = new TelyxMiddleware(t);
     let nextCalled = false;
     const fakeReq = { method: 'GET', url: '/api/test', get: () => 'test-agent', ip: '127.0.0.1' };
-    const fakeRes = { statusCode: 200, send: function(body) { return this; } };
+    const fakeRes = { statusCode: 200, send: function(_body) { return this; } };
     mw.httpRequestMiddleware(fakeReq, fakeRes, () => { nextCalled = true; });
     assert.ok(nextCalled);
     // Trigger response tracking
